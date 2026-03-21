@@ -7,8 +7,8 @@ This repository contains `spawn`, a Bash tool for managing `git worktree` direct
 - `spawn.sh` is a loader, not the full runtime.
 - Shared runtime code lives in `lib/`.
 - `install.sh` installs from the current local directory into `~/.spawn/`.
-- `spawn update` copies `spawn.sh`, `VERSION`, and `lib/` again from the registered local source directory.
-- `spawn new` and `spawn start` support `claude` and `codex`, with `codex` as the default agent.
+- `spawn update` checks npm for a newer version and self-updates via `npm install -g`.
+- `spawn new` and `spawn start` support `claude` and `codex`, with `claude` as the default agent.
 - `-p` seeds the first interactive message; it does not switch `new` or `start` into non-interactive execution.
 - Missing setup hooks should not block `spawn new`; users can run `spawn init` manually later.
 - `spawn init` must also launch the selected agent in interactive CLI mode; no spawn command should use agent batch/exec mode.
