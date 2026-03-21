@@ -61,3 +61,4 @@ if ! grep -qF '.spawn/spawn.sh' "$RC_FILE" 2>/dev/null; then
 fi
 
 printf '✅ spawn installed successfully (v%s)\n' "$VERSION"
+printf '\n💡 Pro tip: add worktrees to your .gitignore:\n   echo ".worktrees/" >> .gitignore\n'
