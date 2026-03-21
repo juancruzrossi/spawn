@@ -17,26 +17,26 @@ If you use Bash, reload `~/.bashrc`.
 
 ## Workflow
 
-You're building a feature:
+Start a feature in its own worktree:
 
 ```sh
 spawn new feature/db-indexes -p "Add missing indexes to the orders table"
 ```
 
-A bug comes in. Spin up another agent without leaving the first one:
+An urgent fix lands while the feature is still in progress — no need to stash or switch branches:
 
 ```sh
 spawn new fix/null-avatar -p "Handle null avatar URL in profile page"
 ```
 
-Merge the bugfix when it's done:
+Once the fix is ready, fold it back and clean up:
 
 ```sh
 spawn merge fix/null-avatar --squash
 spawn rm fix/null-avatar
 ```
 
-Come back tomorrow and pick up the feature work right where you left off:
+Resume the feature the next day, right where the agent left off:
 
 ```sh
 spawn start feature/db-indexes
