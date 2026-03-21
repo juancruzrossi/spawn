@@ -43,12 +43,12 @@ USAGE
 COMMANDS
   new       Create a worktree + branch, then open the agent
   start     Resume an existing worktree session
-  cd        Jump to a worktree directory (no args → repo root)
   ls        List spawn-managed worktrees
+  cd        Jump to a worktree directory (no args → repo root)
+  config    Show or update spawn configuration
   merge     Merge a worktree branch into the primary checkout
   rm        Remove a worktree and its branch
   init      Generate a setup hook for new worktrees
-  config    Show or update spawn configuration
   update    Check npm for updates and self-update
   version   Print the installed version
 
