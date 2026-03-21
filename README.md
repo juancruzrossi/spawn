@@ -55,7 +55,7 @@ spawn start feature/db-indexes
 | `spawn merge [branch]` | Merges a worktree branch into the primary checkout. |
 | `spawn rm [branch]` | Removes a worktree and its branch. |
 | `spawn rm --all` | Removes all spawn worktrees after confirmation. |
-| `spawn init` | Opens the agent to create the repo setup hook. |
+| `spawn init` | Generates a setup script that runs automatically on each new worktree (install deps, link secrets, etc.). |
 | `spawn config set layout <preset>` | Sets `nested`, `outer-nested`, or `sibling`. |
 | `spawn update` | Reinstalls from the local source directory. |
 | `spawn version` | Prints the installed version. |
