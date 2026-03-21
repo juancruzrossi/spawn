@@ -1,0 +1,624 @@
+_spawn_new() {
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    _spawn_print_new_usage
+    return 0
+  fi
+
+  if [[ -z "${1:-}" ]]; then
+    _spawn_print_new_usage
+    return 1
+  fi
+
+  _spawn_parse_session_args new "$@" || return 1
+
+  local branch="$_SPAWN_SESSION_BRANCH"
+  local prompt="$_SPAWN_SESSION_PROMPT"
+  local bypass="$_SPAWN_SESSION_BYPASS"
+  local agent="$_SPAWN_SESSION_AGENT"
+  local from_ref="$_SPAWN_SESSION_FROM"
+
+  if [[ -z "$branch" ]]; then
+    _spawn_print_new_usage
+    return 1
+  fi
+
+  local repo_root
+  repo_root="$(_spawn_repo_root)" || { echo "Not in a git repo"; return 1; }
+
+  local start_point
+  start_point="$(_spawn_resolve_start_point "$from_ref")" || return 1
+
+  local worktree_dir
+  worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch")"
+
+  if [[ -d "$worktree_dir" ]]; then
+    cd "$worktree_dir" || return 1
+  else
+    local base_dir layout
+    base_dir="$(_spawn_worktree_base "$repo_root")"
+    layout="$(_spawn_get_layout "$repo_root")"
+
+    if [[ "$layout" != "sibling" ]]; then
+      mkdir -p "$base_dir"
+    fi
+
+    _spawn_git_stdout_quiet -C "$repo_root" worktree add "$worktree_dir" -b "$branch" "$start_point" || return 1
+    cd "$worktree_dir" || return 1
+
+    _spawn_run_hook setup "$repo_root" "$worktree_dir" || true
+  fi
+
+  _spawn_run_agent "$agent" interactive "$prompt" "$bypass"
+}
+
+_spawn_start() {
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    _spawn_print_start_usage
+    return 0
+  fi
+
+  if [[ -z "${1:-}" ]]; then
+    _spawn_print_start_usage
+    return 1
+  fi
+
+  _spawn_parse_session_args start "$@" || return 1
+
+  local branch="$_SPAWN_SESSION_BRANCH"
+  local prompt="$_SPAWN_SESSION_PROMPT"
+  local bypass="$_SPAWN_SESSION_BYPASS"
+  local agent="$_SPAWN_SESSION_AGENT"
+
+  if [[ -z "$branch" ]]; then
+    _spawn_print_start_usage
+    return 1
+  fi
+
+  local repo_root
+  repo_root="$(_spawn_repo_root)" || { echo "Not in a git repo"; return 1; }
+
+  local worktree_dir
+  worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch")"
+
+  if [[ ! -d "$worktree_dir" ]]; then
+    echo "Worktree not found: $worktree_dir"
+    echo "Run 'spawn ls' to see available worktrees, or 'spawn new $branch' to create one."
+    return 1
+  fi
+
+  cd "$worktree_dir" || return 1
+  _spawn_run_agent "$agent" continue "$prompt" "$bypass"
+}
+
+_spawn_cd() {
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    _spawn_print_cd_usage
+    return 0
+  fi
+
+  local repo_root
+  repo_root="$(_spawn_repo_root)" || { echo "Not in a git repo"; return 1; }
+
+  if [[ -z "${1:-}" ]]; then
+    cd "$repo_root" || return 1
+    return 0
+  fi
+
+  local branch="$1"
+  local worktree_dir
+  worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch")"
+
+  if [[ ! -d "$worktree_dir" ]]; then
+    echo "Worktree not found: $worktree_dir"
+    echo "Run 'spawn ls' to see available worktrees."
+    return 1
+  fi
+
+  cd "$worktree_dir" || return 1
+}
+
+_spawn_ls() {
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    _spawn_print_ls_usage
+    return 0
+  fi
+
+  local repo_root
+  repo_root="$(_spawn_repo_root)" || { echo "Not in a git repo"; return 1; }
+
+  local filter
+  case "$(_spawn_get_layout "$repo_root")" in
+    outer-nested) filter="$(dirname "$repo_root")/$(basename "$repo_root").worktrees/" ;;
+    sibling) filter="$(dirname "$repo_root")/$(basename "$repo_root")-" ;;
+    *) filter="$(_spawn_worktree_base "$repo_root")/" ;;
+  esac
+
+  local lines
+  lines="$(git -C "$repo_root" worktree list --porcelain 2>/dev/null || true)"
+  if [[ -z "$lines" ]]; then
+    echo "No spawn worktrees found."
+    return 0
+  fi
+
+  local wt_dir="" wt_branch="" printed=0
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*)
+        wt_dir="${line#worktree }"
+        wt_branch=""
+        ;;
+      "branch refs/heads/"*)
+        wt_branch="${line#branch refs/heads/}"
+        if [[ "$wt_dir" == "$filter"* ]]; then
+          printf '%s\n' "$wt_branch"
+          printed=1
+        fi
+        ;;
+    esac
+  done <<< "$lines"
+
+  if [[ "$printed" -eq 0 ]]; then
+    echo "No spawn worktrees found."
+  fi
+}
+
+_spawn_merge() {
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    _spawn_print_merge_usage
+    return 0
+  fi
+
+  local branch=""
+  local squash=false
+  local arg
+
+  for arg in "$@"; do
+    case "$arg" in
+      --squash) squash=true ;;
+      *) branch="$arg" ;;
+    esac
+  done
+
+  local repo_root
+  repo_root="$(_spawn_repo_root)" || { echo "Not in a git repo"; return 1; }
+
+  if [[ -z "$branch" ]]; then
+    branch="$(_spawn_detect_worktree_branch "$repo_root" 2>/dev/null || true)"
+    if [[ -z "$branch" ]]; then
+      _spawn_print_merge_usage
+      return 1
+    fi
+  fi
+
+  local worktree_dir
+  worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch")"
+
+  if [[ ! -d "$worktree_dir" ]]; then
+    echo "Worktree not found: $worktree_dir"
+    echo "Run 'spawn ls' to see available worktrees."
+    return 1
+  fi
+
+  if ! git -C "$worktree_dir" diff --quiet 2>/dev/null || \
+     ! git -C "$worktree_dir" diff --cached --quiet 2>/dev/null; then
+    echo "Worktree has uncommitted changes: $worktree_dir"
+    echo "Commit or stash them before merging."
+    return 1
+  fi
+
+  local target_branch
+  target_branch="$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  if [[ -z "$target_branch" ]]; then
+    echo "Could not determine branch in main checkout."
+    return 1
+  fi
+
+  if [[ "$branch" == "$target_branch" ]]; then
+    echo "Cannot merge '$branch' into itself."
+    return 1
+  fi
+
+  cd "$repo_root" || return 1
+
+  if [[ "$squash" == true ]]; then
+    git merge --squash --quiet "$branch" || return 1
+    echo "Squash merge ready: $branch -> $target_branch"
+  else
+    git merge --quiet "$branch" || return 1
+    echo "Merged $branch into $target_branch"
+  fi
+}
+
+_spawn_rm() {
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    _spawn_print_rm_usage
+    return 0
+  fi
+
+  local force=false
+  local branch=""
+  local arg
+
+  for arg in "$@"; do
+    case "$arg" in
+      --force|-f) force=true ;;
+      --all) branch="--all" ;;
+      *) branch="$arg" ;;
+    esac
+  done
+
+  local repo_root
+  repo_root="$(_spawn_repo_root)" || { echo "Not in a git repo"; return 1; }
+
+  if [[ "$branch" == "--all" ]]; then
+    _spawn_rm_all "$repo_root"
+    return $?
+  fi
+
+  if [[ -z "$branch" ]]; then
+    branch="$(_spawn_detect_worktree_branch "$repo_root" 2>/dev/null || true)"
+    if [[ -z "$branch" ]]; then
+      _spawn_print_rm_usage
+      return 1
+    fi
+    cd "$repo_root" || return 1
+  fi
+
+  local worktree_dir
+  worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch")"
+
+  if [[ ! -d "$worktree_dir" ]]; then
+    echo "Worktree not found: $worktree_dir"
+    return 1
+  fi
+
+  local -a remove_args=("$worktree_dir")
+  $force && remove_args=("--force" "${remove_args[@]}")
+
+  cd "$worktree_dir" || return 1
+  _spawn_run_hook teardown "$repo_root" "$worktree_dir" || true
+
+  if _spawn_git_stdout_quiet -C "$repo_root" worktree remove "${remove_args[@]}"; then
+    git -C "$repo_root" branch -d "$branch" >/dev/null 2>&1
+    if [[ "$PWD" == "$worktree_dir"* ]]; then
+      cd "$repo_root" || return 1
+    fi
+    echo "Removed $branch"
+  else
+    echo "Failed to remove worktree: $branch"
+    if ! $force; then
+      echo "Hint: use 'spawn rm --force $branch' to remove a worktree with uncommitted changes"
+    fi
+    return 1
+  fi
+}
+
+_spawn_rm_all() {
+  local repo_root="$1"
+  local base_dir
+  base_dir="$(_spawn_worktree_base "$repo_root")"
+
+  local layout
+  layout="$(_spawn_get_layout "$repo_root")"
+  if [[ "$layout" != "sibling" && ! -d "$base_dir" ]]; then
+    echo "No worktrees directory found."
+    return 0
+  fi
+
+  local filter
+  case "$layout" in
+    outer-nested) filter="$(dirname "$repo_root")/$(basename "$repo_root").worktrees/" ;;
+    sibling) filter="$(dirname "$repo_root")/$(basename "$repo_root")-" ;;
+    *) filter="$base_dir/" ;;
+  esac
+
+  local wt_pairs="" wt_dir="" wt_branch=""
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*)
+        wt_dir="${line#worktree }"
+        wt_branch=""
+        ;;
+      "branch refs/heads/"*)
+        wt_branch="${line#branch refs/heads/}"
+        if [[ "$wt_dir" == "$filter"* ]]; then
+          wt_pairs+="${wt_dir}"$'\t'"${wt_branch}"$'\n'
+        fi
+        ;;
+    esac
+  done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
+
+  if [[ -z "$wt_pairs" ]]; then
+    echo "No spawn worktrees to remove."
+    return 0
+  fi
+
+  local count=0
+  echo "This will remove ALL spawn worktrees and their branches:"
+  echo ""
+  while IFS=$'\t' read -r wt_dir wt_branch; do
+    [[ -n "$wt_dir" ]] || continue
+    echo "  ${wt_dir#$repo_root/}  (branch: $wt_branch)"
+    count=$((count + 1))
+  done <<< "$wt_pairs"
+  echo ""
+
+  if [[ "$count" -eq 0 ]]; then
+    echo "No spawn worktrees to remove."
+    return 0
+  fi
+
+  local expected="DELETE $count WORKTREES"
+  if [[ ! -t 0 ]]; then
+    echo "Refusing to remove all worktrees without an interactive terminal."
+    echo "Re-run 'spawn rm --all' from a TTY and type: $expected"
+    return 1
+  fi
+  printf 'Type "%s" to confirm: ' "$expected"
+  read -r confirmation
+  if [[ "$confirmation" != "$expected" ]]; then
+    echo "Aborted."
+    return 1
+  fi
+
+  if _spawn_detect_worktree_branch "$repo_root" >/dev/null 2>&1; then
+    cd "$repo_root" || return 1
+  fi
+
+  echo ""
+  local failed=0
+  while IFS=$'\t' read -r wt_dir wt_branch; do
+    [[ -n "$wt_dir" ]] || continue
+    cd "$wt_dir" 2>/dev/null || { ((failed++)); continue; }
+    _spawn_run_hook teardown "$repo_root" "$wt_dir" || true
+    if _spawn_git_stdout_quiet -C "$repo_root" worktree remove --force "$wt_dir" 2>/dev/null; then
+      git -C "$repo_root" branch -d "$wt_branch" >/dev/null 2>&1
+      echo "  removed $wt_branch"
+    else
+      echo "  failed $wt_branch"
+      ((failed++))
+    fi
+  done <<< "$wt_pairs"
+
+  cd "$repo_root" || true
+
+  echo ""
+  if [[ "$failed" -eq 0 ]]; then
+    echo "Removed $count worktree(s)"
+  else
+    echo "Removed $((count - failed))/$count worktree(s); $failed failed."
+  fi
+}
+
+_spawn_init() {
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    _spawn_print_init_usage
+    return 0
+  fi
+
+  local replace=false
+  local agent="$(_spawn_default_agent)"
+  local arg
+  while [[ $# -gt 0 ]]; do
+    arg="$1"
+    case "$arg" in
+      -a|--agent)
+        if [[ $# -lt 2 ]]; then
+          echo "Missing value for $arg."
+          return 1
+        fi
+        agent="$2"
+        shift 2
+        ;;
+      --replace) replace=true ;;
+      *)
+        echo "Unknown option: $arg"
+        return 1
+        ;;
+    esac
+    [[ "$arg" == "--replace" ]] && shift
+  done
+
+  local repo_root
+  repo_root="$(_spawn_repo_root)" || { echo "Not in a git repo"; return 1; }
+  _spawn_validate_agent "$agent" || return 1
+
+  case "$agent" in
+    claude) _spawn_require_claude || return 1 ;;
+    codex) _spawn_require_codex || return 1 ;;
+  esac
+
+  if [[ ! -t 0 || ! -t 1 ]]; then
+    echo "spawn init requires an interactive terminal."
+    return 1
+  fi
+
+  local state_dir
+  state_dir="$(_spawn_repo_state_dir "$repo_root")" || {
+    echo "Could not determine the repository metadata directory."
+    return 1
+  }
+
+  local setup_file="$state_dir/setup"
+
+  if [[ -f "$setup_file" && "$replace" != true ]]; then
+    echo "Setup hook already exists: $setup_file"
+    echo "Run 'spawn init --replace' to recreate it."
+    return 1
+  fi
+
+  mkdir -p "$state_dir"
+
+  local prompt
+  IFS= read -r -d '' prompt <<'PROMPT' || true
+Inspect this repository and create the spawn setup hook file under the shared Git metadata directory. Work directly in the repo and write the file yourself.
+
+Rules:
+- The hook path is: $(git rev-parse --git-common-dir)/spawn/setup
+- The file must start with #!/bin/bash
+- Set REPO_ROOT="$(dirname "$(git rev-parse --git-common-dir)")"
+- Symlink gitignored secret/config files from $REPO_ROOT when relevant
+- Install dependencies if a lock file exists and the repo needs them
+- Run codegen/build/bootstrap steps only if they actually apply to this repo
+- Use short bash comments only where helpful
+- No echo statements, no decorative output
+- If the repo needs no setup, write a minimal script with a one-line comment explaining that
+- After writing the file, make it executable
+- Do not ask the user to copy or save files manually; make the change directly
+- Briefly explain what you changed once the file is in place
+PROMPT
+
+  if [[ "$replace" == true ]]; then
+    prompt="$prompt"$'\n'"An existing hook may already be present. Replace it with an updated version if needed."
+  fi
+
+  cd "$repo_root" || return 1
+  _spawn_run_agent "$agent" interactive "$prompt" ""
+}
+
+_spawn_config() {
+  local repo_root
+  repo_root="$(_spawn_repo_root 2>/dev/null)"
+
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    _spawn_print_config_usage
+    return 0
+  fi
+
+  if [[ -z "${1:-}" ]]; then
+    local layout source
+    local repo_config_file=""
+    local global_config_file
+
+    if [[ -n "$repo_root" ]]; then
+      repo_config_file="$(_spawn_repo_config_file "$repo_root" 2>/dev/null || true)"
+    fi
+    global_config_file="$(_spawn_global_config_file)"
+
+    if [[ -n "$repo_config_file" && -f "$repo_config_file" ]] \
+       && grep -q '"layout"' "$repo_config_file" 2>/dev/null; then
+      layout="$(_spawn_read_layout_from_file "$repo_config_file")"
+      source="$repo_config_file"
+    elif [[ -f "$global_config_file" ]] \
+       && grep -q '"layout"' "$global_config_file" 2>/dev/null; then
+      layout="$(_spawn_read_layout_from_file "$global_config_file")"
+      source="~/.spawn/config.json"
+    else
+      layout="nested"
+      source="default"
+    fi
+    echo "layout: $layout"
+    echo "source: $source"
+    return 0
+  fi
+
+  if [[ "${1:-}" != "set" ]]; then
+    _spawn_print_config_usage
+    return 1
+  fi
+  shift
+
+  local global=false
+  local key="" preset=""
+  for arg in "$@"; do
+    case "$arg" in
+      --help|-h)
+        _spawn_print_config_usage
+        return 0
+        ;;
+      --global) global=true ;;
+      layout) key="layout" ;;
+      *) preset="$arg" ;;
+    esac
+  done
+
+  if [[ "$key" != "layout" || -z "$preset" ]]; then
+    echo "Usage: spawn config set layout <preset> [--global]"
+    return 1
+  fi
+
+  case "$preset" in
+    nested|outer-nested|sibling) ;;
+    *)
+      echo "Invalid layout: $preset"
+      echo "Valid presets: nested, outer-nested, sibling"
+      return 1
+      ;;
+  esac
+
+  local config_file
+  if [[ "$global" == true ]]; then
+    config_file="$(_spawn_global_config_file)"
+  else
+    if [[ -z "$repo_root" ]]; then
+      echo "Not in a git repo. Use --global to set globally."
+      return 1
+    fi
+    config_file="$(_spawn_repo_config_file "$repo_root")" || {
+      echo "Could not determine the repository metadata directory."
+      return 1
+    }
+    mkdir -p "$(dirname "$config_file")"
+  fi
+
+  if [[ -n "$repo_root" ]]; then
+    local wt_filter
+    case "$(_spawn_get_layout "$repo_root")" in
+      outer-nested) wt_filter="$(dirname "$repo_root")/$(basename "$repo_root").worktrees/" ;;
+      sibling) wt_filter="$(dirname "$repo_root")/$(basename "$repo_root")-" ;;
+      *) wt_filter="$(_spawn_worktree_base "$repo_root")/" ;;
+    esac
+    local existing
+    existing="$( (git -C "$repo_root" worktree list 2>/dev/null | grep -F "$wt_filter" || true) | wc -l | tr -d ' ' )"
+    if [[ "$existing" -gt 0 ]]; then
+      echo "Warning: $existing existing worktrees use the current layout."
+      echo "Changing layout won't move them. Remove them first with 'spawn rm --all'."
+    fi
+  fi
+
+  if [[ -f "$config_file" ]] && grep -q '"layout"' "$config_file" 2>/dev/null; then
+    local tmp
+    tmp="$(mktemp)"
+    sed 's/"layout"[[:space:]]*:[[:space:]]*"[^"]*"/"layout": "'"$preset"'"/' "$config_file" > "$tmp" && mv "$tmp" "$config_file"
+  else
+    printf '{\n  "layout": "%s"\n}\n' "$preset" > "$config_file"
+  fi
+
+  local target="per-repo"
+  [[ "$global" == true ]] && target="global"
+  echo "Set $target layout to $preset"
+}
+
+_spawn_update() {
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    _spawn_print_update_usage
+    return 0
+  fi
+
+  local source_dir
+  source_dir="$(_spawn_source_dir)" || {
+    echo "No local source registered. Run install.sh from the project directory again."
+    return 1
+  }
+
+  local source_version
+  source_version="$(_spawn_source_version)" || {
+    echo "Registered source is incomplete: $source_dir"
+    return 1
+  }
+
+  if [[ "$source_version" == "$SPAWN_VERSION" ]]; then
+    echo "spawn is already up to date (v$SPAWN_VERSION)"
+    return 0
+  fi
+
+  if _spawn_sync_runtime "$source_dir" "$SPAWN_HOME"; then
+    printf '%s\n' "$source_dir" > "$SPAWN_HOME/SOURCE_DIR"
+    source "$SPAWN_HOME/spawn.sh"
+    SPAWN_VERSION="$(<"$SPAWN_HOME/VERSION")"
+    echo "spawn updated successfully (v$SPAWN_VERSION)"
+  else
+    echo "Failed to copy the local source files."
+    return 1
+  fi
+}
