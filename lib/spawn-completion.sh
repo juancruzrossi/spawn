@@ -39,7 +39,7 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
     local -a agents=(codex claude)
 
     if (( CURRENT == 2 )); then
-      _describe 'spawn command' subcmds
+      _describe -V 'spawn command' subcmds
       return
     fi
 
