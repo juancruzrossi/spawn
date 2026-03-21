@@ -34,7 +34,7 @@ EOF
 _spawn_print_new_usage() {
   cat <<'EOF'
 Usage:
-  spawn new <branch> [-a <agent>] [-b] [-f <base-branch>] [-p <prompt>]
+  spawn new <branch> [-a <agent>] [-b] [-f <base-branch>] [-p <text>]
 
 Description:
   Creates a new branch and worktree, then opens the selected agent
@@ -44,7 +44,7 @@ Options:
   -a, --agent <agent>   Agent to launch: claude or codex
   -b, --bypass          Skip permission prompts for the selected agent
   -f, --from <branch>   Base branch or ref to branch from
-  -p <prompt>           Seed the first interactive message
+  -p, --prompt <text>   Seed the first interactive message
 
 Defaults:
   agent: claude
@@ -64,7 +64,7 @@ EOF
 _spawn_print_start_usage() {
   cat <<'EOF'
 Usage:
-  spawn start <branch> [-a <agent>] [-b] [-p <prompt>]
+  spawn start <branch> [-a <agent>] [-b] [-p <text>]
 
 Description:
   Opens an existing worktree and resumes the most recent session for that
@@ -73,7 +73,7 @@ Description:
 Options:
   -a, --agent <agent>   Agent to launch: claude or codex
   -b, --bypass          Skip permission prompts for the selected agent
-  -p <prompt>           Seed the first interactive message
+  -p, --prompt <text>   Seed the first interactive message
 
 Defaults:
   agent: claude
@@ -513,9 +513,9 @@ _spawn_parse_session_args() {
         _SPAWN_SESSION_AGENT="$2"
         shift 2
         ;;
-      -p)
+      -p|--prompt)
         if [[ $# -lt 2 ]]; then
-          echo "Missing value for -p."
+          echo "Missing value for $1."
           return 1
         fi
         _SPAWN_SESSION_PROMPT="$2"

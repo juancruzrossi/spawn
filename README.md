@@ -31,8 +31,8 @@ spawn rm feature-auth
 
 | Command | What it does |
 | --- | --- |
-| `spawn new <branch> [-a <agent>] [-b] [-f <base-branch>] [-p <prompt>]` | Creates a branch and worktree, then opens the selected agent in an interactive session. |
-| `spawn start <branch> [-a <agent>] [-b] [-p <prompt>]` | Reopens an existing worktree and resumes the most recent session for that worktree in the selected agent. |
+| `spawn new <branch> [-a <agent>] [-b] [-f <base-branch>] [-p <text>]` | Creates a branch and worktree, then opens the selected agent in an interactive session. |
+| `spawn start <branch> [-a <agent>] [-b] [-p <text>]` | Reopens an existing worktree and resumes the most recent session for that worktree in the selected agent. |
 | `spawn cd [branch]` | Jumps to the selected worktree. With no args, goes to the repo root. |
 | `spawn ls` | Lists spawn-managed branches. |
 | `spawn merge [branch] [--squash]` | Merges a worktree branch into the primary checkout. |
@@ -91,7 +91,7 @@ Global installation and global config live under `~/.spawn/`.
 | --- | --- | --- |
 | `-a`, `--agent <name>` | `new`, `start`, `init` | Selects the AI agent (`claude` or `codex`). |
 | `-b`, `--bypass` | `new`, `start` | Enables the agent's permissive mode (`--dangerously-skip-permissions` for Claude, `--yolo` for Codex). |
-| `-p <text>` | `new`, `start` | Seeds the first message in the interactive session. |
+| `-p`, `--prompt <text>` | `new`, `start` | Seeds the first message in the interactive session. |
 | `-f`, `--from <ref>` | `new` | Base branch or ref to create the new branch from (defaults to `HEAD`). |
 | `-f`, `--force` | `rm` | Force-removes a worktree even with uncommitted changes. |
 | `--all` | `rm` | Removes all spawn-managed worktrees (requires interactive confirmation). |

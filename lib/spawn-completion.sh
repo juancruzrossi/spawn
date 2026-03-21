@@ -63,12 +63,12 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
     case "$subcmd" in
       new)
         if [[ "$cur" == -* || -z "$cur" ]]; then
-          compadd -- -a --agent -b --bypass -f --from -p --help
+          compadd -- -a --agent -b --bypass -f --from -p --prompt --help
         fi
         ;;
       start)
         if [[ "$cur" == -* ]]; then
-          compadd -- -a --agent -b --bypass -p --help
+          compadd -- -a --agent -b --bypass -p --prompt --help
         else
           compadd -- "${worktrees[@]}"
         fi
@@ -149,11 +149,11 @@ elif [[ -n "${BASH_VERSION:-}" ]]; then
 
     case "$subcmd" in
       new)
-        COMPREPLY=( $(compgen -W "-a --agent -b --bypass -f --from -p --help" -- "$cur") )
+        COMPREPLY=( $(compgen -W "-a --agent -b --bypass -f --from -p --prompt --help" -- "$cur") )
         ;;
       start)
         if [[ "$cur" == -* ]]; then
-          COMPREPLY=( $(compgen -W "-a --agent -b --bypass -p --help" -- "$cur") )
+          COMPREPLY=( $(compgen -W "-a --agent -b --bypass -p --prompt --help" -- "$cur") )
         else
           COMPREPLY=( $(compgen -W "$(_spawn_worktree_names)" -- "$cur") )
         fi
