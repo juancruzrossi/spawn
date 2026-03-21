@@ -13,6 +13,12 @@ npm install -g @jxtools/spawn
 source ~/.zshrc   # or source ~/.bashrc
 ```
 
+Then add `.worktrees/` to your `.gitignore`:
+
+```bash
+echo '.worktrees/' >> .gitignore
+```
+
 ### Requirements
 
 - **Node.js 18+** (for npm installation)
@@ -27,18 +33,20 @@ source ~/.zshrc   # or source ~/.bashrc
 spawn update
 ```
 
+spawn automatically checks for new versions once a day when you run `spawn new` or `spawn start`.
+
 ## Workflow
 
 Start a feature in its own worktree:
 
 ```sh
-spawn new feature/db-indexes -p "Add missing indexes to the orders table"
+spawn new feature/db-indexes -b -p "Add missing indexes to the orders table"
 ```
 
 An urgent fix lands while the feature is still in progress — no need to stash or switch branches:
 
 ```sh
-spawn new fix/csv-encoding -p "Fix UTF-8 encoding in CSV export for special characters"
+spawn new fix/csv-encoding -b -p "Fix UTF-8 encoding in CSV export for special characters"
 ```
 
 Once the fix is ready, fold it back and clean up:
@@ -51,7 +59,7 @@ spawn rm fix/csv-encoding
 Resume the feature the next day, right where the agent left off:
 
 ```sh
-spawn start feature/db-indexes
+spawn start feature/db-indexes -b
 ```
 
 **`new`** = new worktree, new session. **`start`** = existing worktree, resume session.
@@ -92,6 +100,7 @@ spawn start feature/db-indexes
 | --- | --- |
 | `SPAWN_AGENT=codex` | Changes the default agent. |
 | `SPAWN_BYPASS=1` | Enables bypass mode by default. |
+| `NO_COLOR=1` | Disables colored output. |
 
 ## License
 

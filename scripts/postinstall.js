@@ -19,9 +19,11 @@ const rcFile = shell.includes('zsh')
 // Copy runtime files to ~/.spawn/
 mkdirSync(installDir, { recursive: true })
 
+const pkg = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'))
+
 try {
   cpSync(join(packageDir, 'spawn.sh'), join(installDir, 'spawn.sh'))
-  cpSync(join(packageDir, 'VERSION'), join(installDir, 'VERSION'))
+  writeFileSync(join(installDir, 'VERSION'), pkg.version + '\n')
 
   const libDest = join(installDir, 'lib')
   if (existsSync(libDest)) rmSync(libDest, { recursive: true })
@@ -41,5 +43,4 @@ try {
   // Non-fatal: user can add the source line manually
 }
 
-const version = readFileSync(join(installDir, 'VERSION'), 'utf8').trim()
-console.log(`spawn v${version} installed. Restart your shell or run: source ${rcFile}`)
+console.log(`spawn v${pkg.version} installed. Restart your shell or run: source ${rcFile}`)

@@ -2,32 +2,39 @@ SPAWN_HOME="$HOME/.spawn"
 SPAWN_VERSION="unknown"
 [[ -f "$SPAWN_HOME/VERSION" ]] && SPAWN_VERSION="$(<"$SPAWN_HOME/VERSION")"
 
+_spawn_has_color() { [[ -t 1 && "${NO_COLOR:-}" == "" ]]; }
+_spawn_bold()  { _spawn_has_color && printf '\033[1m%s\033[0m' "$*" || printf '%s' "$*"; }
+_spawn_dim()   { _spawn_has_color && printf '\033[2m%s\033[0m' "$*" || printf '%s' "$*"; }
+_spawn_green() { _spawn_has_color && printf '\033[32m%s\033[0m' "$*" || printf '%s' "$*"; }
+_spawn_cyan()  { _spawn_has_color && printf '\033[36m%s\033[0m' "$*" || printf '%s' "$*"; }
+_spawn_error() { printf 'spawn: %s\n' "$*" >&2; }
+
 _spawn_print_main_usage() {
+  _spawn_bold "spawn v$SPAWN_VERSION"; echo " — Parallel AI agent sessions via git worktrees"
   cat <<'EOF'
-Usage:
+
+USAGE
   spawn <command> [options]
 
-Commands:
-  new       Create a worktree + branch, then open the selected agent
-  start     Reopen an existing worktree in the selected agent
-  cd        Jump to a worktree directory or back to the repo root
+COMMANDS
+  new       Create a worktree + branch, then open the agent
+  start     Resume an existing worktree session
+  cd        Jump to a worktree directory (no args → repo root)
   ls        List spawn-managed worktrees
   merge     Merge a worktree branch into the primary checkout
-  rm        Remove one worktree, or all of them with --all
-  init      Open an agent to create the repo setup hook
+  rm        Remove a worktree and its branch
+  init      Generate a setup hook for new worktrees
   config    Show or update spawn configuration
-  update    Refresh the installed spawn runtime from the local source
-  version   Print the installed spawn version
+  update    Check npm for updates and self-update
+  version   Print the installed version
 
-Examples:
-  spawn new feature/rest-performance
-  spawn new feature/rest-performance -p "Optimize the GET /users endpoint"
-  spawn start feature/rest-performance
-  spawn merge feature/rest-performance --squash
-  spawn config set layout sibling
+EXAMPLES
+  spawn new feature/auth -p "Add OAuth2 login"
+  spawn start feature/auth
+  spawn merge feature/auth --squash
+  spawn rm feature/auth
 
-Run:
-  spawn <command> --help
+Run 'spawn <command> --help' for details on a specific command.
 EOF
 }
 
@@ -218,14 +225,14 @@ spawn() {
     init)    _spawn_init "$@" ;;
     config)  _spawn_config "$@" ;;
     update)  _spawn_update "$@" ;;
-    version) echo "spawn $SPAWN_VERSION" ;;
+    version) _spawn_version ;;
     --help|-h|"")
       _spawn_print_main_usage
       return 0
       ;;
     *)
-      echo "Unknown command: $cmd"
-      echo "Run 'spawn --help' for usage."
+      _spawn_error "unknown command: $cmd"
+      echo "Run 'spawn --help' for usage." >&2
       return 1
       ;;
   esac
@@ -234,28 +241,13 @@ spawn() {
 _spawn_repo_root() {
   local git_common_dir
   git_common_dir="$(git rev-parse --git-common-dir 2>/dev/null)" || return 1
-  (CDPATH= cd -- "$(dirname -- "$git_common_dir")" && pwd -P)
+  local parent_dir="${git_common_dir%/*}"
+  [[ "$parent_dir" == "$git_common_dir" ]] && parent_dir="."
+  (CDPATH= cd -- "$parent_dir" && pwd -P)
 }
 
 _spawn_safe_name() {
   printf '%s\n' "${1//\//-}"
-}
-
-_spawn_source_dir() {
-  local source_file="$SPAWN_HOME/SOURCE_DIR"
-  [[ -f "$source_file" ]] || return 1
-
-  local source_dir
-  source_dir="$(<"$source_file")"
-  [[ -n "$source_dir" && -d "$source_dir" ]] || return 1
-  printf '%s\n' "$source_dir"
-}
-
-_spawn_source_version() {
-  local source_dir
-  source_dir="$(_spawn_source_dir)" || return 1
-  [[ -f "$source_dir/VERSION" ]] || return 1
-  tr -d '[:space:]' < "$source_dir/VERSION"
 }
 
 _spawn_global_config_file() {
@@ -302,7 +294,16 @@ _spawn_repo_hook_file() {
 _spawn_read_layout_from_file() {
   local config_file="$1"
   [[ -f "$config_file" ]] || return 1
-  grep '"layout"' "$config_file" 2>/dev/null | sed 's/.*"layout"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/' || true
+  local line
+  while IFS= read -r line; do
+    if [[ "$line" == *'"layout"'* ]]; then
+      line="${line#*\"layout\"}"
+      line="${line#*\"}"
+      line="${line%%\"*}"
+      printf '%s\n' "$line"
+      return 0
+    fi
+  done < "$config_file"
 }
 
 _spawn_get_layout() {
@@ -329,13 +330,23 @@ _spawn_get_layout() {
 
 _spawn_worktree_base() {
   local repo_root="$1"
-  local layout
-  layout="$(_spawn_get_layout "$repo_root")"
+  local layout="${2:-$(_spawn_get_layout "$repo_root")}"
 
   case "$layout" in
-    outer-nested) printf '%s\n' "$(dirname "$repo_root")/$(basename "$repo_root").worktrees" ;;
-    sibling) printf '%s\n' "$(dirname "$repo_root")" ;;
+    outer-nested) printf '%s\n' "${repo_root%/*}/${repo_root##*/}.worktrees" ;;
+    sibling) printf '%s\n' "${repo_root%/*}" ;;
     *) printf '%s\n' "$repo_root/.worktrees" ;;
+  esac
+}
+
+_spawn_worktree_filter() {
+  local repo_root="$1"
+  local layout="${2:-$(_spawn_get_layout "$repo_root")}"
+
+  case "$layout" in
+    outer-nested) printf '%s\n' "${repo_root%/*}/${repo_root##*/}.worktrees/" ;;
+    sibling) printf '%s\n' "${repo_root%/*}/${repo_root##*/}-" ;;
+    *) printf '%s\n' "$repo_root/.worktrees/" ;;
   esac
 }
 
@@ -343,26 +354,24 @@ _spawn_worktree_dir() {
   local repo_root="$1"
   local safe_name
   safe_name="$(_spawn_safe_name "$2")"
+  local layout="${3:-$(_spawn_get_layout "$repo_root")}"
 
-  case "$(_spawn_get_layout "$repo_root")" in
-    outer-nested) printf '%s\n' "$(dirname "$repo_root")/$(basename "$repo_root").worktrees/$safe_name" ;;
-    sibling) printf '%s\n' "$(dirname "$repo_root")/$(basename "$repo_root")-$safe_name" ;;
+  case "$layout" in
+    outer-nested) printf '%s\n' "${repo_root%/*}/${repo_root##*/}.worktrees/$safe_name" ;;
+    sibling) printf '%s\n' "${repo_root%/*}/${repo_root##*/}-$safe_name" ;;
     *) printf '%s\n' "$repo_root/.worktrees/$safe_name" ;;
   esac
 }
 
 _spawn_detect_worktree_branch() {
   local repo_root="$1"
-  local layout
-  local base=""
+  local layout="${2:-$(_spawn_get_layout "$repo_root")}"
   local safe_name=""
   local wt_dir=""
 
-  layout="$(_spawn_get_layout "$repo_root")"
-
   case "$layout" in
     outer-nested)
-      base="$(dirname "$repo_root")/$(basename "$repo_root").worktrees"
+      local base="${repo_root%/*}/${repo_root##*/}.worktrees"
       if [[ "$PWD" == "$base/"* ]]; then
         safe_name="${PWD#$base/}"
         safe_name="${safe_name%%/*}"
@@ -370,24 +379,20 @@ _spawn_detect_worktree_branch() {
       fi
       ;;
     sibling)
-      local repo_name parent check_dir current_dir
-      repo_name="$(basename "$repo_root")"
-      parent="$(dirname "$repo_root")"
-      check_dir="$PWD"
-
-      while [[ "$(dirname "$check_dir")" != "$parent" && "$check_dir" != "/" ]]; do
-        check_dir="$(dirname "$check_dir")"
-      done
-
-      current_dir="$(basename "$check_dir")"
-      if [[ "$current_dir" == "${repo_name}-"* && "$check_dir" != "$repo_root" ]]; then
-        safe_name="${current_dir#${repo_name}-}"
-        wt_dir="$parent/$current_dir"
+      local repo_name="${repo_root##*/}"
+      local parent="${repo_root%/*}"
+      if [[ "$PWD" == "$parent/"* ]]; then
+        local remainder="${PWD#$parent/}"
+        local current_dir="${remainder%%/*}"
+        if [[ "$current_dir" == "${repo_name}-"* && "$parent/$current_dir" != "$repo_root" ]]; then
+          safe_name="${current_dir#${repo_name}-}"
+          wt_dir="$parent/$current_dir"
+        fi
       fi
       ;;
     *)
-      if [[ "$PWD" == */.worktrees/* ]]; then
-        safe_name="${PWD##*/.worktrees/}"
+      if [[ "$PWD" == "$repo_root/.worktrees/"* ]]; then
+        safe_name="${PWD#$repo_root/.worktrees/}"
         safe_name="${safe_name%%/*}"
         wt_dir="$repo_root/.worktrees/$safe_name"
       fi
@@ -396,14 +401,26 @@ _spawn_detect_worktree_branch() {
 
   [[ -n "$safe_name" ]] || return 1
 
-  git -C "$repo_root" worktree list --porcelain \
-    | grep -A2 "^worktree ${wt_dir}\$" \
-    | grep '^branch ' \
-    | sed 's|^branch refs/heads/||'
+  local _line _found=0
+  while IFS= read -r _line; do
+    case "$_line" in
+      "worktree $wt_dir") _found=1 ;;
+      "branch refs/heads/"*)
+        if [[ "$_found" -eq 1 ]]; then
+          printf '%s\n' "${_line#branch refs/heads/}"
+          return 0
+        fi
+        ;;
+      "") _found=0 ;;
+    esac
+  done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
+  return 1
 }
 
 _spawn_spinner_start() {
   [[ -n "${ZSH_VERSION:-}" ]] && setopt localoptions nomonitor
+  local msg="${1:-}"
+  [[ -n "$msg" ]] && printf '%s ' "$msg"
   (
     while true; do
       for c in '⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏'; do
@@ -416,12 +433,60 @@ _spawn_spinner_start() {
 }
 
 _spawn_spinner_stop() {
-  [[ -n "$_SPAWN_SPINNER_PID" ]] || return
+  [[ -n "${_SPAWN_SPINNER_PID:-}" ]] || return
   [[ -n "${ZSH_VERSION:-}" ]] && setopt localoptions nomonitor
   kill "$_SPAWN_SPINNER_PID" 2>/dev/null
   wait "$_SPAWN_SPINNER_PID" 2>/dev/null
   printf '\b \n'
   unset _SPAWN_SPINNER_PID
+}
+
+_spawn_version() {
+  _spawn_bold "spawn v$SPAWN_VERSION"; echo ""
+  local shell_name="unknown"
+  [[ -n "${ZSH_VERSION:-}" ]] && shell_name="zsh $ZSH_VERSION"
+  [[ -n "${BASH_VERSION:-}" ]] && shell_name="bash $BASH_VERSION"
+  local git_ver
+  git_ver="$(git --version 2>/dev/null)" || git_ver="not found"
+  git_ver="${git_ver#git version }"
+  local agent="none"
+  command -v claude >/dev/null 2>&1 && agent="claude"
+  command -v codex >/dev/null 2>&1 && { [[ "$agent" == "none" ]] && agent="codex" || agent="$agent, codex"; }
+  _spawn_dim "shell: $shell_name"; echo ""
+  _spawn_dim "git:   $git_ver"; echo ""
+  _spawn_dim "agent: $agent"; echo ""
+}
+
+_SPAWN_UPDATE_CHECK_FILE="$SPAWN_HOME/.last_update_check"
+
+_spawn_check_update_available() {
+  command -v npm >/dev/null 2>&1 || return 1
+
+  local now
+  now="$(date +%s 2>/dev/null)" || return 1
+  if [[ -f "$_SPAWN_UPDATE_CHECK_FILE" ]]; then
+    local last_check
+    last_check="$(<"$_SPAWN_UPDATE_CHECK_FILE")"
+    local elapsed=$(( now - last_check ))
+    (( elapsed < 86400 )) && return 1
+  fi
+
+  local latest
+  latest="$(npm view @jxtools/spawn version 2>/dev/null)" || return 1
+  [[ -n "$latest" && "$latest" != "$SPAWN_VERSION" ]] || return 1
+
+  printf '%s\n' "$now" > "$_SPAWN_UPDATE_CHECK_FILE" 2>/dev/null
+
+  echo ""
+  _spawn_dim "A new version of spawn is available: "
+  _spawn_bold "v$latest"
+  _spawn_dim " (current: v$SPAWN_VERSION)"
+  echo ""
+  _spawn_dim "Run '"
+  _spawn_cyan "spawn update"
+  _spawn_dim "' to upgrade."
+  echo ""
+  echo ""
 }
 
 _spawn_current_head() {
@@ -433,28 +498,28 @@ _spawn_resolve_start_point() {
 
   if [[ -n "$from_ref" ]]; then
     git rev-parse --verify "${from_ref}^{commit}" 2>/dev/null || {
-      echo "Could not resolve base ref: $from_ref"
+      _spawn_error "could not resolve base ref: $from_ref"
       return 1
     }
     return 0
   fi
 
   _spawn_current_head || {
-    echo "Could not determine the current HEAD."
+    _spawn_error "could not determine the current HEAD"
     return 1
   }
 }
 
 _spawn_require_claude() {
   if ! command -v claude >/dev/null 2>&1; then
-    echo "claude CLI not found. Install it: https://code.claude.com/docs/en/quickstart"
+    _spawn_error "claude CLI not found. Install it: https://code.claude.com/docs/en/quickstart"
     return 1
   fi
 }
 
 _spawn_require_codex() {
   if ! command -v codex >/dev/null 2>&1; then
-    echo "codex CLI not found. Install it: https://openai.com/es-419/codex"
+    _spawn_error "codex CLI not found. Install it: https://openai.com/es-419/codex"
     return 1
   fi
 }
@@ -467,8 +532,8 @@ _spawn_validate_agent() {
   case "$1" in
     claude|codex) return 0 ;;
     *)
-      echo "Invalid agent: $1"
-      echo "Valid agents: claude, codex"
+      _spawn_error "invalid agent: $1"
+      echo "Valid agents: claude, codex" >&2
       return 1
       ;;
   esac
@@ -494,11 +559,11 @@ _spawn_parse_session_args() {
         ;;
       -f|--from)
         if [[ "$mode" != "new" ]]; then
-          echo "Option $1 is only supported by 'spawn new'."
+          _spawn_error "option $1 is only supported by 'spawn new'"
           return 1
         fi
         if [[ $# -lt 2 ]]; then
-          echo "Missing value for $1."
+          _spawn_error "missing value for $1"
           return 1
         fi
         _SPAWN_SESSION_FROM="$2"
@@ -506,7 +571,7 @@ _spawn_parse_session_args() {
         ;;
       -a|--agent)
         if [[ $# -lt 2 ]]; then
-          echo "Missing value for $1."
+          _spawn_error "missing value for $1"
           return 1
         fi
         _SPAWN_SESSION_AGENT="$2"
@@ -514,7 +579,7 @@ _spawn_parse_session_args() {
         ;;
       -p|--prompt)
         if [[ $# -lt 2 ]]; then
-          echo "Missing value for $1."
+          _spawn_error "missing value for $1"
           return 1
         fi
         _SPAWN_SESSION_PROMPT="$2"
@@ -528,7 +593,7 @@ _spawn_parse_session_args() {
         done
         ;;
       -*)
-        echo "Unknown option: $1"
+        _spawn_error "unknown option: $1"
         return 1
         ;;
       *)
@@ -536,7 +601,7 @@ _spawn_parse_session_args() {
           branch_words+=("$1")
         else
           if [[ -n "$_SPAWN_SESSION_BRANCH" ]]; then
-            echo "Too many arguments."
+            _spawn_error "too many arguments"
             return 1
           fi
           _SPAWN_SESSION_BRANCH="$1"
@@ -599,27 +664,4 @@ _spawn_run_hook() {
 
 _spawn_git_stdout_quiet() {
   git "$@" >/dev/null
-}
-
-_spawn_sync_runtime() {
-  local source_dir="$1"
-  local target_dir="$2"
-  local tmp_dir
-
-  [[ -f "$source_dir/spawn.sh" ]] || return 1
-  [[ -f "$source_dir/VERSION" ]] || return 1
-  [[ -d "$source_dir/lib" ]] || return 1
-
-  tmp_dir="$(mktemp -d)" || return 1
-
-  cp "$source_dir/spawn.sh" "$tmp_dir/spawn.sh" || { rm -rf "$tmp_dir"; return 1; }
-  cp "$source_dir/VERSION" "$tmp_dir/VERSION" || { rm -rf "$tmp_dir"; return 1; }
-  cp -R "$source_dir/lib" "$tmp_dir/lib" || { rm -rf "$tmp_dir"; return 1; }
-
-  mkdir -p "$target_dir"
-  mv "$tmp_dir/spawn.sh" "$target_dir/spawn.sh" || { rm -rf "$tmp_dir"; return 1; }
-  mv "$tmp_dir/VERSION" "$target_dir/VERSION" || { rm -rf "$tmp_dir"; return 1; }
-  rm -rf "$target_dir/lib"
-  mv "$tmp_dir/lib" "$target_dir/lib" || { rm -rf "$tmp_dir"; return 1; }
-  rmdir "$tmp_dir" 2>/dev/null || true
 }
