@@ -1,6 +1,10 @@
 # spawn
 
-`spawn` creates and reopens `git worktree` directories so you can work in parallel with Codex or Claude without mixing changes.
+A CLI tool for running multiple AI coding agents in parallel without merge conflicts.
+
+`spawn` wraps `git worktree` so each agent session (Claude Code, Codex CLI) gets its own isolated working directory and branch. You can create, resume, merge, and clean up sessions from a single command, while the main checkout stays untouched.
+
+**Why?** AI agents work best when they own a branch end-to-end. Without isolation, concurrent agents step on each other's changes. `spawn` gives each session a dedicated worktree, handles branch creation and cleanup, runs per-repo setup hooks, and lets you merge results back with one command.
 
 ## Install
 
@@ -32,7 +36,7 @@ spawn rm feature-auth
 | `spawn cd [branch]` | Jumps to the selected worktree. With no args, goes to the repo root. |
 | `spawn ls` | Lists spawn-managed branches. |
 | `spawn merge [branch] [--squash]` | Merges a worktree branch into the primary checkout. |
-| `spawn rm [branch] [-f|--force]` | Removes one worktree and its branch. |
+| `spawn rm [branch] [-f\|--force]` | Removes one worktree and its branch. |
 | `spawn rm --all` | Removes all spawn-managed worktrees after explicit confirmation. |
 | `spawn init [-a <agent>] [--replace]` | Opens the selected agent in an interactive session to create the repo setup hook. |
 | `spawn config` | Shows the effective worktree layout. |
@@ -80,6 +84,20 @@ Per-repo metadata lives under the repository Git metadata directory:
 - repo config: `$(git rev-parse --git-common-dir)/spawn/config.json`
 
 Global installation and global config live under `~/.spawn/`.
+
+## Flags
+
+| Flag | Short | Used in | Description |
+| --- | --- | --- | --- |
+| `--agent <name>` | `-a` | `new`, `start`, `init` | Selects the AI agent (`claude` or `codex`). |
+| `--bypass` | `-b` | `new`, `start` | Enables the agent's permissive mode (`--dangerously-skip-permissions` for Claude, `--yolo` for Codex). |
+| `--prompt <text>` | `-p` | `new`, `start` | Seeds the first message in the interactive session. |
+| `--from <ref>` | `-f` | `new` | Base branch or ref to create the new branch from (defaults to `HEAD`). |
+| `--force` | `-f` | `rm` | Force-removes a worktree even with uncommitted changes. |
+| `--all` | | `rm` | Removes all spawn-managed worktrees (requires interactive confirmation). |
+| `--squash` | | `merge` | Squash-merges the worktree branch instead of a regular merge. |
+| `--replace` | | `init` | Overwrites an existing setup hook. |
+| `--global` | | `config set` | Applies the layout setting globally instead of per-repo. |
 
 ## Layouts
 
