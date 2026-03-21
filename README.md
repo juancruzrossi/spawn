@@ -10,11 +10,6 @@ Supported agents: **Claude Code** and **Codex CLI**.
 
 ```bash
 npm install -g @jxtools/spawn
-```
-
-Restart your shell after installing, or run:
-
-```bash
 source ~/.zshrc   # or source ~/.bashrc
 ```
 
