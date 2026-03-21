@@ -141,6 +141,7 @@ _spawn_ls() {
   fi
 
   local wt_dir="" wt_branch="" printed=0
+  local rel_dir=""
   while IFS= read -r line; do
     case "$line" in
       "worktree "*)
@@ -150,7 +151,8 @@ _spawn_ls() {
       "branch refs/heads/"*)
         wt_branch="${line#branch refs/heads/}"
         if [[ "$wt_dir" == "$filter"* ]]; then
-          printf '%s\n' "$wt_branch"
+          rel_dir="${wt_dir#"$(dirname "$repo_root")"/}"
+          printf '%-20s %s\n' "$wt_branch" "$rel_dir"
           printed=1
         fi
         ;;
