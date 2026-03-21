@@ -91,7 +91,7 @@ Global installation and global config live under `~/.spawn/`.
 | --- | --- | --- |
 | `-a`, `--agent <name>` | `new`, `start`, `init` | Selects the AI agent (`claude` or `codex`). |
 | `-b`, `--bypass` | `new`, `start` | Enables the agent's permissive mode (`--dangerously-skip-permissions` for Claude, `--yolo` for Codex). |
-| `-p`, `--prompt <text>` | `new`, `start` | Seeds the first message in the interactive session. |
+| `-p <text>` | `new`, `start` | Seeds the first message in the interactive session. |
 | `-f`, `--from <ref>` | `new` | Base branch or ref to create the new branch from (defaults to `HEAD`). |
 | `-f`, `--force` | `rm` | Force-removes a worktree even with uncommitted changes. |
 | `--all` | `rm` | Removes all spawn-managed worktrees (requires interactive confirmation). |
