@@ -3,11 +3,7 @@ _spawn_worktree_names() {
   repo_root="$(_spawn_repo_root 2>/dev/null)" || return
 
   local prefix
-  case "$(_spawn_get_layout "$repo_root")" in
-    outer-nested) prefix="$(dirname "$repo_root")/$(basename "$repo_root").worktrees/" ;;
-    sibling) prefix="$(dirname "$repo_root")/$(basename "$repo_root")-" ;;
-    *) prefix="$(_spawn_worktree_base "$repo_root")/" ;;
-  esac
+  prefix="$(_spawn_worktree_filter "$repo_root")"
 
   git -C "$repo_root" worktree list --porcelain 2>/dev/null \
     | awk -v prefix="$prefix" '
@@ -37,12 +33,10 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
       'rm:Remove one or more worktrees'
       'init:Open an agent to create the setup hook'
       'config:Show or change configuration'
-      'update:Refresh spawn from the local source'
+      'update:Check npm for updates and self-update'
       'version:Print the installed version'
     )
     local -a agents=(codex claude)
-    local -a worktrees=( ${(f)"$(_spawn_worktree_names)"} )
-    local -a branches=( ${(f)"$(_spawn_branch_names)"} )
 
     if (( CURRENT == 2 )); then
       _describe 'spawn command' subcmds
@@ -55,6 +49,7 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
         return
         ;;
       -f|--from)
+        local -a branches=( ${(f)"$(_spawn_branch_names)"} )
         compadd -- "${branches[@]}"
         return
         ;;
@@ -70,6 +65,7 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
         if [[ "$cur" == -* ]]; then
           compadd -- -a --agent -b --bypass -p --prompt --help
         else
+          local -a worktrees=( ${(f)"$(_spawn_worktree_names)"} )
           compadd -- "${worktrees[@]}"
         fi
         ;;
@@ -77,6 +73,7 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
         if [[ "$cur" == -* ]]; then
           compadd -- --help
         else
+          local -a worktrees=( ${(f)"$(_spawn_worktree_names)"} )
           compadd -- "${worktrees[@]}"
         fi
         ;;
@@ -87,6 +84,7 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
         if [[ "$cur" == -* ]]; then
           compadd -- --squash --help
         else
+          local -a worktrees=( ${(f)"$(_spawn_worktree_names)"} )
           compadd -- "${worktrees[@]}"
         fi
         ;;
@@ -94,6 +92,7 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
         if [[ "$cur" == -* ]]; then
           compadd -- --all -f --force --help
         else
+          local -a worktrees=( ${(f)"$(_spawn_worktree_names)"} )
           compadd -- "${worktrees[@]}"
         fi
         ;;
