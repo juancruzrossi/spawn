@@ -26,14 +26,14 @@ spawn new feature/db-indexes -p "Add missing indexes to the orders table"
 An urgent fix lands while the feature is still in progress — no need to stash or switch branches:
 
 ```sh
-spawn new fix/null-avatar -p "Handle null avatar URL in profile page"
+spawn new fix/csv-encoding -p "Fix UTF-8 encoding in CSV export for special characters"
 ```
 
 Once the fix is ready, fold it back and clean up:
 
 ```sh
-spawn merge fix/null-avatar --squash
-spawn rm fix/null-avatar
+spawn merge fix/csv-encoding --squash
+spawn rm fix/csv-encoding
 ```
 
 Resume the feature the next day, right where the agent left off:
