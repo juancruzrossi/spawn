@@ -8,12 +8,29 @@ Supported agents: **Claude Code** and **Codex CLI**.
 
 ## Install
 
-```sh
-./install.sh
-source ~/.zshrc
+```bash
+npm install -g @jxtools/spawn
 ```
 
-If you use Bash, reload `~/.bashrc`.
+Restart your shell after installing, or run:
+
+```bash
+source ~/.zshrc   # or source ~/.bashrc
+```
+
+### Requirements
+
+- **Node.js 18+** (for npm installation)
+- **Git** (required)
+- **AI Provider** (at least one):
+  - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (default)
+  - [Codex](https://github.com/openai/codex)
+
+## Update
+
+```bash
+npm install -g @jxtools/spawn@latest
+```
 
 ## Workflow
 
@@ -80,3 +97,7 @@ spawn start feature/db-indexes
 | --- | --- |
 | `SPAWN_AGENT=codex` | Changes the default agent. |
 | `SPAWN_BYPASS=1` | Enables bypass mode by default. |
+
+## License
+
+ISC

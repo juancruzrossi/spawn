@@ -1,0 +1,37 @@
+{
+  "name": "@jxtools/spawn",
+  "version": "1.0.0",
+  "description": "CLI tool for running multiple AI coding agents in parallel using git worktrees",
+  "files": [
+    "spawn.sh",
+    "lib/",
+    "VERSION",
+    "install.sh",
+    "scripts/"
+  ],
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "spawn",
+    "git",
+    "worktree",
+    "ai",
+    "agent",
+    "claude-code",
+    "codex",
+    "parallel",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/juancruzrossi/spawn"
+  },
+  "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
