@@ -597,30 +597,36 @@ _spawn_update() {
     return 0
   fi
 
-  local source_dir
-  source_dir="$(_spawn_source_dir)" || {
-    echo "No local source registered. Run install.sh from the project directory again."
+  if ! command -v npm >/dev/null 2>&1; then
+    echo "npm not found. Install Node.js 18+ first."
     return 1
-  }
+  fi
 
-  local source_version
-  source_version="$(_spawn_source_version)" || {
-    echo "Registered source is incomplete: $source_dir"
+  echo "Current version: v$SPAWN_VERSION"
+  echo "Checking for updates..."
+
+  local latest
+  latest="$(npm view @jxtools/spawn version 2>/dev/null || true)"
+
+  if [[ -z "$latest" ]]; then
+    echo "Could not check latest version."
     return 1
-  }
+  fi
 
-  if [[ "$source_version" == "$SPAWN_VERSION" ]]; then
-    echo "spawn is already up to date (v$SPAWN_VERSION)"
+  if [[ "$latest" == "$SPAWN_VERSION" ]]; then
+    echo "Already on the latest version (v$SPAWN_VERSION)"
     return 0
   fi
 
-  if _spawn_sync_runtime "$source_dir" "$SPAWN_HOME"; then
-    printf '%s\n' "$source_dir" > "$SPAWN_HOME/SOURCE_DIR"
+  echo "New version available: v$latest"
+  echo "Updating..."
+
+  if npm install -g @jxtools/spawn@latest; then
     source "$SPAWN_HOME/spawn.sh"
     SPAWN_VERSION="$(<"$SPAWN_HOME/VERSION")"
-    echo "spawn updated successfully (v$SPAWN_VERSION)"
+    echo "Updated to v$SPAWN_VERSION"
   else
-    echo "Failed to copy the local source files."
+    echo "Update failed."
     return 1
   fi
 }
