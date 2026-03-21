@@ -24,7 +24,7 @@ source ~/.zshrc   # or source ~/.bashrc
 ## Update
 
 ```bash
-npm install -g @jxtools/spawn@latest
+spawn update
 ```
 
 ## Workflow
@@ -69,7 +69,7 @@ spawn start feature/db-indexes
 | `spawn rm --all` | Removes all spawn worktrees after confirmation. |
 | `spawn init` | Generates a setup script that runs automatically on each new worktree (install deps, link secrets, etc.). |
 | `spawn config set layout <preset>` | Sets `nested`, `outer-nested`, or `sibling`. |
-| `spawn update` | Reinstalls from the local source directory. |
+| `spawn update` | Checks for a newer version on npm and updates. |
 | `spawn version` | Prints the installed version. |
 
 ## Flags

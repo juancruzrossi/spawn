@@ -200,8 +200,7 @@ Usage:
   spawn update
 
 Description:
-  Updates the installed spawn runtime from the local source directory
-  registered during install.
+  Checks for a newer version on npm and updates if available.
 EOF
 }
 
