@@ -13,7 +13,7 @@ npm install -g @jxtools/spawn
 source ~/.zshrc   # or source ~/.bashrc
 ```
 
-Then add `.worktrees/` to your `.gitignore`:
+If you use the default `nested` layout, add `.worktrees/` to your `.gitignore`:
 
 ```bash
 echo '.worktrees/' >> .gitignore

@@ -44,4 +44,4 @@ try {
 }
 
 console.log(`spawn v${pkg.version} installed. Restart your shell or run: source ${rcFile}`)
-console.log(`\n💡 Pro tip: add worktrees to your .gitignore:\n   echo ".worktrees/" >> .gitignore`)
+console.log(`\n💡 Pro tip: if you use the default nested layout, add worktrees to your .gitignore:\n   echo ".worktrees/" >> .gitignore`)

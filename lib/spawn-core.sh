@@ -1,6 +1,30 @@
 SPAWN_HOME="$HOME/.spawn"
-SPAWN_VERSION="unknown"
-[[ -f "$SPAWN_HOME/VERSION" ]] && SPAWN_VERSION="$(<"$SPAWN_HOME/VERSION")"
+
+_spawn_runtime_version() {
+  if [[ -n "${_SPAWN_ENTRY_FILE:-}" ]]; then
+    local runtime_dir
+    runtime_dir="$(CDPATH= cd -- "$(dirname -- "$_SPAWN_ENTRY_FILE")" && pwd -P 2>/dev/null)" || runtime_dir=""
+
+    local package_file="$runtime_dir/package.json"
+    if [[ -f "$package_file" ]]; then
+      local package_version
+      package_version="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$package_file")"
+      [[ -n "$package_version" ]] && {
+        printf '%s\n' "$package_version"
+        return 0
+      }
+    fi
+  fi
+
+  [[ -f "$SPAWN_HOME/VERSION" ]] && {
+    printf '%s\n' "$(<"$SPAWN_HOME/VERSION")"
+    return 0
+  }
+
+  printf '%s\n' "unknown"
+}
+
+SPAWN_VERSION="$(_spawn_runtime_version)"
 
 _spawn_has_color() { [[ -t 1 && "${NO_COLOR:-}" == "" ]]; }
 _spawn_bold()  { _spawn_has_color && printf '\033[1m%s\033[0m' "$*" || printf '%s' "$*"; }
@@ -460,22 +484,21 @@ _spawn_version() {
 _SPAWN_UPDATE_CHECK_FILE="$SPAWN_HOME/.last_update_check"
 
 _spawn_check_update_available() {
-  command -v npm >/dev/null 2>&1 || return 0
+  command -v npm >/dev/null 2>&1 || return 1
 
   local now
-  now="$(date +%s 2>/dev/null)" || return 0
+  now="$(date +%s 2>/dev/null)" || return 1
   if [[ -f "$_SPAWN_UPDATE_CHECK_FILE" ]]; then
     local last_check
     last_check="$(<"$_SPAWN_UPDATE_CHECK_FILE")"
     local elapsed=$(( now - last_check ))
-    (( elapsed < 86400 )) && return 0
+    (( elapsed < 86400 )) && return 1
   fi
 
   local latest
-  latest="$(npm view @jxtools/spawn version 2>/dev/null)" || return 0
-  [[ -n "$latest" && "$latest" != "$SPAWN_VERSION" ]] || return 0
-
-  printf '%s\n' "$now" > "$_SPAWN_UPDATE_CHECK_FILE" 2>/dev/null
+  latest="$(npm view @jxtools/spawn version 2>/dev/null)" || return 1
+  printf '%s\n' "$now" > "$_SPAWN_UPDATE_CHECK_FILE" 2>/dev/null || true
+  [[ -n "$latest" && "$latest" != "$SPAWN_VERSION" ]] || return 1
 
   echo ""
   _spawn_dim "A new version of spawn is available: "
@@ -487,6 +510,25 @@ _spawn_check_update_available() {
   _spawn_dim "' to upgrade."
   echo ""
   echo ""
+}
+
+_spawn_schedule_update_check() {
+  local runtime="${_SPAWN_ENTRY_FILE:-$SPAWN_HOME/spawn.sh}"
+  [[ -f "$runtime" ]] || return 0
+
+  local shell_bin=""
+  if command -v bash >/dev/null 2>&1; then
+    shell_bin="$(command -v bash)"
+  elif command -v zsh >/dev/null 2>&1; then
+    shell_bin="$(command -v zsh)"
+  else
+    return 0
+  fi
+
+  "$shell_bin" -c '
+    source "$1" >/dev/null 2>&1 || exit 0
+    (_spawn_check_update_available || true) >/dev/tty 2>/dev/null &
+  ' _ "$runtime" </dev/null >/dev/null 2>&1 || true
 }
 
 _spawn_current_head() {
