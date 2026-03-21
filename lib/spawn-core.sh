@@ -460,20 +460,20 @@ _spawn_version() {
 _SPAWN_UPDATE_CHECK_FILE="$SPAWN_HOME/.last_update_check"
 
 _spawn_check_update_available() {
-  command -v npm >/dev/null 2>&1 || return 1
+  command -v npm >/dev/null 2>&1 || return 0
 
   local now
-  now="$(date +%s 2>/dev/null)" || return 1
+  now="$(date +%s 2>/dev/null)" || return 0
   if [[ -f "$_SPAWN_UPDATE_CHECK_FILE" ]]; then
     local last_check
     last_check="$(<"$_SPAWN_UPDATE_CHECK_FILE")"
     local elapsed=$(( now - last_check ))
-    (( elapsed < 86400 )) && return 1
+    (( elapsed < 86400 )) && return 0
   fi
 
   local latest
-  latest="$(npm view @jxtools/spawn version 2>/dev/null)" || return 1
-  [[ -n "$latest" && "$latest" != "$SPAWN_VERSION" ]] || return 1
+  latest="$(npm view @jxtools/spawn version 2>/dev/null)" || return 0
+  [[ -n "$latest" && "$latest" != "$SPAWN_VERSION" ]] || return 0
 
   printf '%s\n' "$now" > "$_SPAWN_UPDATE_CHECK_FILE" 2>/dev/null
 

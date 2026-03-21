@@ -52,7 +52,7 @@ _spawn_new() {
 
   _spawn_green "✓"; echo " Created worktree: $branch"
   _spawn_dim "  Launching $agent..."; echo ""
-  _spawn_check_update_available &
+  ( _spawn_check_update_available & ) 2>/dev/null
   _spawn_run_agent "$agent" interactive "$prompt" "$bypass"
 }
 
@@ -97,7 +97,7 @@ _spawn_start() {
   cd "$worktree_dir" || return 1
   _spawn_green "✓"; echo " Resuming session: $branch"
   _spawn_dim "  Launching $agent..."; echo ""
-  _spawn_check_update_available &
+  ( _spawn_check_update_available & ) 2>/dev/null
   _spawn_run_agent "$agent" continue "$prompt" "$bypass"
 }
 
