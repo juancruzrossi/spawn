@@ -18,13 +18,17 @@ If you use Bash, reload `~/.bashrc`.
 ## Daily use
 
 ```sh
-spawn new feature-auth
-spawn new feature-auth -f develop
-spawn new fix-calc -a codex
-spawn start feature-auth
+spawn new feature/rest-performance
+spawn new feature/rest-performance -f develop
+spawn new feature/rest-performance -p "Optimize the GET /users endpoint"
+
+spawn start feature/rest-performance
+
 spawn ls
-spawn merge feature-auth
-spawn rm feature-auth
+
+spawn merge feature/rest-performance
+
+spawn rm feature/rest-performance
 ```
 
 ## Commands
@@ -58,7 +62,7 @@ spawn rm feature-auth
 
 `export SPAWN_BYPASS=1` enables bypass by default.
 
-`-p` seeds the first message, but `spawn new` and `spawn start` still open the normal interactive session for the selected agent.
+`-p` or `--prompt` seeds the first message. The value must be quoted if it contains spaces (e.g. `-p "Fix the login bug"`). `spawn new` and `spawn start` still open the normal interactive session for the selected agent.
 
 `spawn init` also opens the agent in a normal interactive session. `spawn` never uses the agents in non-interactive mode.
 
@@ -69,8 +73,8 @@ spawn rm feature-auth
 Use `-f` or `--from` to override it:
 
 ```sh
-spawn new feature-auth -f develop
-spawn new hotfix-payments -f release/1.4
+spawn new feature/rest-performance -f develop
+spawn new hotfix/payments -f release/1.4
 ```
 
 `-f` means the base branch or ref used to create the new branch.

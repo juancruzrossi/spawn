@@ -20,10 +20,10 @@ Commands:
   version   Print the installed spawn version
 
 Examples:
-  spawn new feature/auth
-  spawn new feature/auth -a claude -p "Continue from the API refactor"
-  spawn start feature/auth
-  spawn merge feature/auth --squash
+  spawn new feature/rest-performance
+  spawn new feature/rest-performance -p "Optimize the GET /users endpoint"
+  spawn start feature/rest-performance
+  spawn merge feature/rest-performance --squash
   spawn config set layout sibling
 
 Run:
@@ -55,9 +55,9 @@ Environment:
   SPAWN_BYPASS=1
 
 Examples:
-  spawn new feature/auth
-  spawn new feature/auth -f develop
-  spawn new feature/auth -a codex -p "Pick up from the auth cleanup"
+  spawn new feature/rest-performance
+  spawn new feature/rest-performance -f develop
+  spawn new feature/rest-performance -a codex -p "Optimize the GET /users endpoint"
 EOF
 }
 
@@ -83,8 +83,8 @@ Environment:
   SPAWN_BYPASS=1
 
 Examples:
-  spawn start feature/auth
-  spawn start feature/auth -a codex
+  spawn start feature/rest-performance
+  spawn start feature/rest-performance -a codex
 EOF
 }
 
@@ -99,7 +99,7 @@ Description:
 
 Examples:
   spawn cd
-  spawn cd feature/auth
+  spawn cd feature/rest-performance
 EOF
 }
 
@@ -126,8 +126,8 @@ Options:
   --squash   Stage the merge result as a single squashed change
 
 Examples:
-  spawn merge feature/auth
-  spawn merge feature/auth --squash
+  spawn merge feature/rest-performance
+  spawn merge feature/rest-performance --squash
 EOF
 }
 
@@ -146,8 +146,8 @@ Options:
   --all         Remove every spawn-managed worktree after confirmation
 
 Examples:
-  spawn rm feature/auth
-  spawn rm --force feature/auth
+  spawn rm feature/rest-performance
+  spawn rm --force feature/rest-performance
   spawn rm --all
 EOF
 }
