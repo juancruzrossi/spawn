@@ -467,18 +467,6 @@ _spawn_spinner_stop() {
 
 _spawn_version() {
   _spawn_bold "spawn v$SPAWN_VERSION"; echo ""
-  local shell_name="unknown"
-  [[ -n "${ZSH_VERSION:-}" ]] && shell_name="zsh $ZSH_VERSION"
-  [[ -n "${BASH_VERSION:-}" ]] && shell_name="bash $BASH_VERSION"
-  local git_ver
-  git_ver="$(git --version 2>/dev/null)" || git_ver="not found"
-  git_ver="${git_ver#git version }"
-  local agent="none"
-  command -v claude >/dev/null 2>&1 && agent="claude"
-  command -v codex >/dev/null 2>&1 && { [[ "$agent" == "none" ]] && agent="codex" || agent="$agent, codex"; }
-  _spawn_dim "shell: $shell_name"; echo ""
-  _spawn_dim "git:   $git_ver"; echo ""
-  _spawn_dim "agent: $agent"; echo ""
 }
 
 _SPAWN_UPDATE_CHECK_FILE="$SPAWN_HOME/.last_update_check"
