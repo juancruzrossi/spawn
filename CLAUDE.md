@@ -36,7 +36,6 @@ This repository contains `spawn`, a Bash tool for managing `git worktree` direct
 - `lib/spawn-commands.sh`
 - `lib/spawn-completion.sh`
 - `install.sh`
-- `examples/setup-node`
 - `README.md`
 
 ## Verification

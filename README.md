@@ -1,10 +1,10 @@
 # spawn
 
-A CLI tool for running multiple AI coding agents in parallel without merge conflicts.
+CLI tool for running multiple AI coding agents in parallel.
 
-`spawn` wraps `git worktree` so each agent session (Claude Code, Codex CLI) gets its own isolated working directory and branch. You can create, resume, merge, and clean up sessions from a single command, while the main checkout stays untouched.
+`spawn` wraps `git worktree` so each agent session gets its own isolated working directory and branch. You can create, resume, and clean up sessions from a single command while the main checkout stays untouched.
 
-**Why?** AI agents work best when they own a branch end-to-end. Without isolation, concurrent agents step on each other's changes. `spawn` gives each session a dedicated worktree, handles branch creation and cleanup, runs per-repo setup hooks, and lets you merge results back with one command.
+Supported agents: **Claude Code** and **Codex CLI**.
 
 ## Install
 
@@ -87,17 +87,17 @@ Global installation and global config live under `~/.spawn/`.
 
 ## Flags
 
-| Flag | Short | Used in | Description |
-| --- | --- | --- | --- |
-| `--agent <name>` | `-a` | `new`, `start`, `init` | Selects the AI agent (`claude` or `codex`). |
-| `--bypass` | `-b` | `new`, `start` | Enables the agent's permissive mode (`--dangerously-skip-permissions` for Claude, `--yolo` for Codex). |
-| `--prompt <text>` | `-p` | `new`, `start` | Seeds the first message in the interactive session. |
-| `--from <ref>` | `-f` | `new` | Base branch or ref to create the new branch from (defaults to `HEAD`). |
-| `--force` | `-f` | `rm` | Force-removes a worktree even with uncommitted changes. |
-| `--all` | | `rm` | Removes all spawn-managed worktrees (requires interactive confirmation). |
-| `--squash` | | `merge` | Squash-merges the worktree branch instead of a regular merge. |
-| `--replace` | | `init` | Overwrites an existing setup hook. |
-| `--global` | | `config set` | Applies the layout setting globally instead of per-repo. |
+| Flag | Used in | Description |
+| --- | --- | --- |
+| `-a`, `--agent <name>` | `new`, `start`, `init` | Selects the AI agent (`claude` or `codex`). |
+| `-b`, `--bypass` | `new`, `start` | Enables the agent's permissive mode (`--dangerously-skip-permissions` for Claude, `--yolo` for Codex). |
+| `-p`, `--prompt <text>` | `new`, `start` | Seeds the first message in the interactive session. |
+| `-f`, `--from <ref>` | `new` | Base branch or ref to create the new branch from (defaults to `HEAD`). |
+| `-f`, `--force` | `rm` | Force-removes a worktree even with uncommitted changes. |
+| `--all` | `rm` | Removes all spawn-managed worktrees (requires interactive confirmation). |
+| `--squash` | `merge` | Squash-merges the worktree branch instead of a regular merge. |
+| `--replace` | `init` | Overwrites an existing setup hook. |
+| `--global` | `config set` | Applies the layout setting globally instead of per-repo. |
 
 ## Layouts
 

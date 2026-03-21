@@ -1,8 +1,0 @@
-#!/bin/bash
-# Example spawn setup hook for a Node.js project.
-
-REPO_ROOT="$(dirname "$(git rev-parse --git-common-dir)")"
-
-ln -sf "$REPO_ROOT/.dev.vars" .dev.vars
-
-npm ci && npx prisma generate
