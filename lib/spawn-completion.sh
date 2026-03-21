@@ -27,12 +27,12 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
     local -a subcmds=(
       'new:Create a worktree and open an agent'
       'start:Reopen an existing worktree'
-      'cd:Jump to a worktree or the repo root'
       'ls:List spawn-managed worktrees'
+      'cd:Jump to a worktree or the repo root'
+      'config:Show or change configuration'
       'merge:Merge a worktree branch'
       'rm:Remove one or more worktrees'
       'init:Open an agent to create the setup hook'
-      'config:Show or change configuration'
       'update:Check npm for updates and self-update'
       'version:Print the installed version'
     )
@@ -131,7 +131,7 @@ elif [[ -n "${BASH_VERSION:-}" ]]; then
     subcmd="${COMP_WORDS[1]}"
 
     if (( COMP_CWORD == 1 )); then
-      COMPREPLY=( $(compgen -W "new start cd ls merge rm init config update version" -- "$cur") )
+      COMPREPLY=( $(compgen -W "new start ls cd config merge rm init update version" -- "$cur") )
       return
     fi
 
