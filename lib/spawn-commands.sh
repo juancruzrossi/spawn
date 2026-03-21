@@ -52,7 +52,7 @@ _spawn_new() {
 
   _spawn_green "✓"; echo " Created worktree: $branch"
   _spawn_dim "  Launching $agent..."; echo ""
-  _spawn_check_update_available &
+  _spawn_schedule_update_check
   _spawn_run_agent "$agent" interactive "$prompt" "$bypass"
 }
 
@@ -97,7 +97,7 @@ _spawn_start() {
   cd "$worktree_dir" || return 1
   _spawn_green "✓"; echo " Resuming session: $branch"
   _spawn_dim "  Launching $agent..."; echo ""
-  _spawn_check_update_available &
+  _spawn_schedule_update_check
   _spawn_run_agent "$agent" continue "$prompt" "$bypass"
 }
 
@@ -301,8 +301,12 @@ _spawn_rm() {
   cd "$repo_root" || return 1
 
   if _spawn_git_stdout_quiet -C "$repo_root" worktree remove "${remove_args[@]}"; then
-    git -C "$repo_root" branch -d "$branch" >/dev/null 2>&1
-    echo "Removed $branch"
+    if git -C "$repo_root" branch -D "$branch" >/dev/null 2>&1; then
+      echo "Removed $branch"
+    else
+      _spawn_error "removed worktree but failed to delete branch: $branch"
+      return 1
+    fi
   else
     _spawn_error "failed to remove worktree: $branch"
     if ! $force; then
@@ -382,8 +386,12 @@ _spawn_rm_all() {
     cd "$wt_dir" 2>/dev/null || { ((failed++)); continue; }
     _spawn_run_hook teardown "$repo_root" "$wt_dir" || true
     if _spawn_git_stdout_quiet -C "$repo_root" worktree remove --force "$wt_dir" 2>/dev/null; then
-      git -C "$repo_root" branch -d "$wt_branch" >/dev/null 2>&1
-      echo "  removed $wt_branch"
+      if git -C "$repo_root" branch -D "$wt_branch" >/dev/null 2>&1; then
+        echo "  removed $wt_branch"
+      else
+        echo "  failed $wt_branch"
+        ((failed++))
+      fi
     else
       echo "  failed $wt_branch"
       ((failed++))

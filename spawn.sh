@@ -8,6 +8,8 @@ else
   _spawn_entry_file="$0"
 fi
 
+_SPAWN_ENTRY_FILE="$_spawn_entry_file"
+
 _SPAWN_RUNTIME_DIR="$(CDPATH= cd -- "$(dirname -- "$_spawn_entry_file")" && pwd -P)"
 unset _spawn_entry_file
 
