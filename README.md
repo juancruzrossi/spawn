@@ -15,96 +15,68 @@ source ~/.zshrc
 
 If you use Bash, reload `~/.bashrc`.
 
-## Daily use
+## Workflow
+
+You're building a feature:
 
 ```sh
-spawn new feature/rest-performance
-spawn new feature/rest-performance -f develop
-spawn new feature/rest-performance -p "Optimize the GET /users endpoint"
-
-spawn start feature/rest-performance
-
-spawn ls
-
-spawn merge feature/rest-performance
-
-spawn rm feature/rest-performance
+spawn new feature/db-indexes -p "Add missing indexes to the orders table"
 ```
+
+A bug comes in. Spin up another agent without leaving the first one:
+
+```sh
+spawn new fix/null-avatar -p "Handle null avatar URL in profile page"
+```
+
+Merge the bugfix when it's done:
+
+```sh
+spawn merge fix/null-avatar --squash
+spawn rm fix/null-avatar
+```
+
+Come back tomorrow and pick up the feature work right where you left off:
+
+```sh
+spawn start feature/db-indexes
+```
+
+**`new`** = new worktree, new session. **`start`** = existing worktree, resume session.
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `spawn new <branch> [-a <agent>] [-b] [-f <base-branch>] [-p <text>]` | Creates a branch and worktree, then opens the selected agent in an interactive session. |
-| `spawn start <branch> [-a <agent>] [-b] [-p <text>]` | Reopens an existing worktree and resumes the most recent session for that worktree in the selected agent. |
-| `spawn cd [branch]` | Jumps to the selected worktree. With no args, goes to the repo root. |
+| `spawn new <branch>` | Creates a branch and worktree, then opens the agent. |
+| `spawn start <branch>` | Reopens an existing worktree and resumes the session. |
+| `spawn cd [branch]` | Jumps to a worktree. No args goes to repo root. |
 | `spawn ls` | Lists spawn-managed branches. |
-| `spawn merge [branch] [--squash]` | Merges a worktree branch into the primary checkout. |
-| `spawn rm [branch] [-f\|--force]` | Removes one worktree and its branch. |
-| `spawn rm --all` | Removes all spawn-managed worktrees after explicit confirmation. |
-| `spawn init [-a <agent>] [--replace]` | Opens the selected agent in an interactive session to create the repo setup hook. |
-| `spawn config` | Shows the effective worktree layout. |
-| `spawn config set layout <preset> [--global]` | Sets `nested`, `outer-nested`, or `sibling`. |
-| `spawn update` | Reinstalls from the local source directory registered by `install.sh`. |
+| `spawn merge [branch]` | Merges a worktree branch into the primary checkout. |
+| `spawn rm [branch]` | Removes a worktree and its branch. |
+| `spawn rm --all` | Removes all spawn worktrees after confirmation. |
+| `spawn init` | Opens the agent to create the repo setup hook. |
+| `spawn config set layout <preset>` | Sets `nested`, `outer-nested`, or `sibling`. |
+| `spawn update` | Reinstalls from the local source directory. |
 | `spawn version` | Prints the installed version. |
-
-## Agents
-
-- Default agent: `claude`
-- `-a claude` forces Claude
-- `-a codex` forces Codex
-- `export SPAWN_AGENT=codex` changes the default
-
-`-b` or `--bypass` enables the agent-specific bypass flag:
-
-- Claude: `--dangerously-skip-permissions`
-- Codex: `--yolo`
-
-`export SPAWN_BYPASS=1` enables bypass by default.
-
-`-p` or `--prompt` seeds the first message. The value must be quoted if it contains spaces (e.g. `-p "Fix the login bug"`). `spawn new` and `spawn start` still open the normal interactive session for the selected agent.
-
-`spawn init` also opens the agent in a normal interactive session. `spawn` never uses the agents in non-interactive mode.
-
-## Base branch
-
-`spawn new` starts from the current `HEAD` by default.
-
-Use `-f` or `--from` to override it:
-
-```sh
-spawn new feature/rest-performance -f develop
-spawn new hotfix/payments -f release/1.4
-```
-
-`-f` means the base branch or ref used to create the new branch.
-
-## Repo metadata
-
-`spawn` does not create `.spawn/` inside your project.
-
-Per-repo metadata lives under the repository Git metadata directory:
-
-- repo config: `$(git rev-parse --git-common-dir)/spawn/config.json`
-
-Global installation and global config live under `~/.spawn/`.
 
 ## Flags
 
 | Flag | Used in | Description |
 | --- | --- | --- |
-| `-a`, `--agent <name>` | `new`, `start`, `init` | Selects the AI agent (`claude` or `codex`). |
-| `-b`, `--bypass` | `new`, `start` | Enables the agent's permissive mode (`--dangerously-skip-permissions` for Claude, `--yolo` for Codex). |
-| `-p`, `--prompt <text>` | `new`, `start` | Seeds the first message in the interactive session. |
-| `-f`, `--from <ref>` | `new` | Base branch or ref to create the new branch from (defaults to `HEAD`). |
-| `-f`, `--force` | `rm` | Force-removes a worktree even with uncommitted changes. |
-| `--all` | `rm` | Removes all spawn-managed worktrees (requires interactive confirmation). |
-| `--squash` | `merge` | Squash-merges the worktree branch instead of a regular merge. |
+| `-a`, `--agent <name>` | `new`, `start`, `init` | Selects the agent (`claude` or `codex`). Defaults to `claude`. |
+| `-b`, `--bypass` | `new`, `start` | Enables permissive mode (`--dangerously-skip-permissions` / `--yolo`). |
+| `-p`, `--prompt <text>` | `new`, `start` | Seeds the first message. Quote if it contains spaces. |
+| `-f`, `--from <ref>` | `new` | Base branch to create from. Defaults to `HEAD`. |
+| `-f`, `--force` | `rm` | Force-removes a worktree with uncommitted changes. |
+| `--all` | `rm` | Removes all spawn worktrees (interactive confirmation). |
+| `--squash` | `merge` | Squash-merges instead of a regular merge. |
 | `--replace` | `init` | Overwrites an existing setup hook. |
-| `--global` | `config set` | Applies the layout setting globally instead of per-repo. |
+| `--global` | `config set` | Applies the layout globally instead of per-repo. |
 
-## Layouts
+## Environment variables
 
-- `nested`: `.worktrees/<branch>/`
-- `outer-nested`: `<repo>.worktrees/<branch>/`
-- `sibling`: worktrees next to the main checkout
+| Variable | Effect |
+| --- | --- |
+| `SPAWN_AGENT=codex` | Changes the default agent. |
+| `SPAWN_BYPASS=1` | Enables bypass mode by default. |
