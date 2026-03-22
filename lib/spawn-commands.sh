@@ -648,6 +648,7 @@ _spawn_status() {
       "branch refs/heads/"*)
         wt_branch="${line#branch refs/heads/}"
         [[ "$wt_dir" == "$filter"* ]] || continue
+        [[ -d "$wt_dir" ]] || continue
 
         local state="idle" agent="" _proc_line
         while IFS= read -r _proc_line; do
