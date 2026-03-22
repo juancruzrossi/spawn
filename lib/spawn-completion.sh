@@ -2,13 +2,10 @@ _spawn_worktree_names() {
   local repo_root
   repo_root="$(_spawn_repo_root 2>/dev/null)" || return
 
-  local prefix
-  prefix="$(_spawn_worktree_filter "$repo_root")"
-
-  git -C "$repo_root" worktree list --porcelain 2>/dev/null \
-    | awk -v prefix="$prefix" '
-        /^worktree / { wt=substr($0,10); in_wt=(index(wt,prefix)==1) }
-        /^branch / && in_wt { sub(/^branch refs\/heads\//,""); print }'
+  local wt_dir wt_branch
+  while IFS=$'\t' read -r wt_dir wt_branch; do
+    [[ -n "$wt_branch" ]] && printf '%s\n' "$wt_branch"
+  done < <(_spawn_spawn_worktree_pairs "$repo_root")
 }
 
 _spawn_branch_names() {

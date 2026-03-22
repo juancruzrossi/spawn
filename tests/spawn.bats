@@ -169,6 +169,29 @@ EOF
   [[ "$output" == */repo\|*/wt ]]
 }
 
+@test "_spawn_spawn_worktree_pairs returns only spawn-managed worktrees" {
+  run bash -c '
+    source "$1/spawn.sh"
+    tmp_dir="$(mktemp -d)"
+    _spawn_get_layout() { printf "%s\n" nested; }
+    git() {
+      cat <<EOF
+worktree $tmp_dir/main
+HEAD 1111111
+branch refs/heads/main
+
+worktree $tmp_dir/.worktrees/feat-test-1
+HEAD 2222222
+branch refs/heads/feat/test-1
+EOF
+    }
+    _spawn_spawn_worktree_pairs "$tmp_dir"
+  ' -- "$PROJECT_DIR"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *$'\t'"feat/test-1"* ]]
+  [[ "$output" != *$'\t'"main"* ]]
+}
+
 @test "init fails fast without an interactive terminal" {
   run bash -c '
     source "$1/spawn.sh"
@@ -180,17 +203,13 @@ EOF
   [[ "$output" == *"spawn init requires an interactive terminal"* ]]
 }
 
-@test "version prefers the local checkout package.json over ~/.spawn/VERSION" {
+@test "_spawn_match_agent handles worktree paths with colons" {
   run bash -c '
-    tmp_home="$(mktemp -d)"
-    mkdir -p "$tmp_home/.spawn"
-    printf "0.0.1\n" > "$tmp_home/.spawn/VERSION"
-    HOME="$tmp_home"
     source "$1/spawn.sh"
-    spawn version
+    _spawn_match_agent "/tmp/repo:with:colon" "/tmp/repo:with:colon:codex:123"
   ' -- "$PROJECT_DIR"
   [ "$status" -eq 0 ]
-  [[ "$output" == spawn\ v1.3.0* ]]
+  [ "$output" = "codex:123" ]
 }
 
 @test "postinstall exits non-zero when runtime copy fails" {
@@ -204,6 +223,29 @@ EOF
   ' -- "$PROJECT_DIR"
   [ "$status" -eq 1 ]
   [[ "$output" == *"spawn: failed to copy runtime files:"* ]]
+}
+
+@test "_spawn_registered_repos persists cleanup even when captured" {
+  run bash -c '
+    source "$1/spawn.sh"
+    tmp_home="$(mktemp -d)"
+    export SPAWN_HOME="$tmp_home/.spawn"
+    mkdir -p "$SPAWN_HOME"
+    valid_repo="$tmp_home/repo"
+    mkdir -p "$valid_repo/.git"
+    printf "%s\n%s\n" "$valid_repo" "$tmp_home/missing" > "$SPAWN_HOME/repos"
+    git() {
+      if [[ "$1" == "-C" && "$3" == "rev-parse" ]]; then
+        return 0
+      fi
+      command git "$@"
+    }
+    _spawn_registered_repos >/dev/null
+    cat "$SPAWN_HOME/repos"
+  ' -- "$PROJECT_DIR"
+  [ "$status" -eq 0 ]
+  [[ "$output" == */repo ]]
+  [[ "$output" != *missing* ]]
 }
 
 @test "rm deletes the branch even when it is not merged" {

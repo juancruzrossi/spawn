@@ -286,6 +286,15 @@ _spawn_repo_root() {
   (CDPATH= cd -- "$parent_dir" && pwd -P)
 }
 
+_spawn_require_repo_root() {
+  local repo_root
+  repo_root="$(_spawn_repo_root)" || {
+    _spawn_error "not in a git repo"
+    return 1
+  }
+  printf '%s\n' "$repo_root"
+}
+
 _spawn_safe_name() {
   printf '%s\n' "${1//\//-}"
 }
@@ -401,6 +410,27 @@ _spawn_worktree_dir() {
     sibling) printf '%s\n' "${repo_root%/*}/${repo_root##*/}-$safe_name" ;;
     *) printf '%s\n' "$repo_root/.worktrees/$safe_name" ;;
   esac
+}
+
+_spawn_spawn_worktree_pairs() {
+  local repo_root="$1"
+  local layout="${2:-$(_spawn_get_layout "$repo_root")}"
+  local filter
+  filter="$(_spawn_worktree_filter "$repo_root" "$layout")"
+
+  local line wt_dir="" wt_branch=""
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*)
+        wt_dir="${line#worktree }"
+        wt_branch=""
+        ;;
+      "branch refs/heads/"*)
+        wt_branch="${line#branch refs/heads/}"
+        [[ "$wt_dir" == "$filter"* ]] && printf '%s\t%s\n' "$wt_dir" "$wt_branch"
+        ;;
+    esac
+  done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
 }
 
 _spawn_detect_worktree_branch() {
