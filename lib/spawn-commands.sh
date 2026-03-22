@@ -1,3 +1,25 @@
+_spawn_offer_gitignore() {
+  local repo_root="$1" layout="$2"
+  [[ "$layout" == "nested" ]] || return 0
+  local gitignore="$repo_root/.gitignore"
+  [[ -f "$gitignore" ]] && grep -qF '.worktrees' "$gitignore" 2>/dev/null && return 0
+
+  local state_dir
+  state_dir="$(_spawn_repo_state_dir "$repo_root" 2>/dev/null)" || return 0
+  [[ -f "$state_dir/.gitignore_offered" ]] && return 0
+  [[ -t 0 ]] || return 0
+
+  local answer=""
+  printf 'Add .worktrees/ to .gitignore? [Y/n] '
+  read -r answer
+  mkdir -p "$state_dir"
+  touch "$state_dir/.gitignore_offered"
+  case "${answer:-Y}" in
+    [Yy]*) printf '%s\n' '.worktrees/' >> "$gitignore"
+           _spawn_green "✓"; echo " Added .worktrees/ to .gitignore" ;;
+  esac
+}
+
 _spawn_new() {
   if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     _spawn_print_new_usage
@@ -51,6 +73,7 @@ _spawn_new() {
   fi
 
   _spawn_register_repo "$repo_root"
+  _spawn_offer_gitignore "$repo_root" "$layout"
   _spawn_green "✓"; echo " Created worktree: $branch"
   _spawn_dim "  Launching $agent..."; echo ""
   _spawn_schedule_update_check
