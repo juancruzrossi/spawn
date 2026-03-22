@@ -150,6 +150,28 @@ EOF
   [[ "$output" == *"CLAUDE:"* ]]
 }
 
+@test "new clears internal session globals after parsing" {
+  run bash -c '
+    source "$1/spawn.sh"
+    tmp_dir="$(mktemp -d)"
+    mkdir -p "$tmp_dir"
+    _spawn_repo_root() { printf "%s\n" "$tmp_dir"; }
+    _spawn_worktree_dir() { printf "%s\n" "$tmp_dir/clean-wt"; }
+    _spawn_worktree_base() { printf "%s\n" "$tmp_dir/.worktrees"; }
+    _spawn_get_layout() { printf "%s\n" nested; }
+    _spawn_resolve_start_point() { printf "%s\n" HEAD; }
+    _spawn_schedule_update_check() { :; }
+    _spawn_register_repo() { :; }
+    _spawn_offer_gitignore() { :; }
+    git() { mkdir -p "$tmp_dir/clean-wt"; return 0; }
+    claude() { return 0; }
+    _spawn_new feature-clean -p hello
+    printf "%s|%s\n" "${_SPAWN_SESSION_BRANCH+set}" "${_SPAWN_SESSION_PROMPT+set}"
+  ' -- "$PROJECT_DIR"
+  [ "$status" -eq 0 ]
+  [ "$output" = "|" ]
+}
+
 @test "_spawn_run_hook forwards repo and worktree paths to hooks" {
   run bash -c '
     source "$1/spawn.sh"
@@ -250,6 +272,38 @@ EOF
   ' -- "$PROJECT_DIR"
   [ "$status" -eq 0 ]
   [[ "$output" == *"installed. Restart your shell"* ]]
+}
+
+@test "update fails when npm install leaves an incomplete runtime" {
+  run bash -c '
+    project_dir="$1"
+    tmp_dir="$(mktemp -d)"
+    home_dir="$(mktemp -d)"
+    bindir="$tmp_dir/bin"
+    mkdir -p "$bindir" "$home_dir/.spawn"
+    cat > "$bindir/npm" <<'"'"'EOF'"'"'
+#!/bin/sh
+if [ "$1" = "view" ]; then
+  printf "9.9.9\n"
+  exit 0
+fi
+if [ "$1" = "install" ]; then
+  printf "9.9.9\n" > "$HOME/.spawn/VERSION"
+  exit 0
+fi
+exit 1
+EOF
+    chmod +x "$bindir/npm"
+    export HOME="$home_dir"
+    export PATH="$bindir:/usr/bin:/bin"
+    source "$project_dir/spawn.sh"
+    _spawn_spinner_start() { :; }
+    _spawn_spinner_stop() { :; }
+    SPAWN_VERSION=1.4.1
+    _spawn_update
+  ' -- "$PROJECT_DIR"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"update failed: installed runtime is incomplete"* ]]
 }
 
 @test "_spawn_registered_repos persists cleanup even when captured" {

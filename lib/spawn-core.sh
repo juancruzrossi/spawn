@@ -604,6 +604,15 @@ _spawn_default_agent() {
   printf '%s\n' "${SPAWN_AGENT:-claude}"
 }
 
+_spawn_clear_session_args() {
+  unset \
+    _SPAWN_SESSION_BRANCH \
+    _SPAWN_SESSION_PROMPT \
+    _SPAWN_SESSION_BYPASS \
+    _SPAWN_SESSION_AGENT \
+    _SPAWN_SESSION_FROM
+}
+
 _spawn_validate_agent() {
   case "$1" in
     claude|codex) return 0 ;;
@@ -619,6 +628,7 @@ _spawn_parse_session_args() {
   local mode="$1"
   shift
 
+  _spawn_clear_session_args
   _SPAWN_SESSION_BRANCH=""
   _SPAWN_SESSION_PROMPT=""
   _SPAWN_SESSION_BYPASS="${SPAWN_BYPASS:-}"

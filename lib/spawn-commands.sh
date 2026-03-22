@@ -30,13 +30,14 @@ _spawn_new() {
     return 1
   fi
 
-  _spawn_parse_session_args new "$@" || return 1
+  _spawn_parse_session_args new "$@" || { _spawn_clear_session_args; return 1; }
 
   local branch="$_SPAWN_SESSION_BRANCH"
   local prompt="$_SPAWN_SESSION_PROMPT"
   local bypass="$_SPAWN_SESSION_BYPASS"
   local agent="$_SPAWN_SESSION_AGENT"
   local from_ref="$_SPAWN_SESSION_FROM"
+  _spawn_clear_session_args
 
   if [[ -z "$branch" ]]; then
     _spawn_print_new_usage
@@ -90,12 +91,13 @@ _spawn_start() {
     return 1
   fi
 
-  _spawn_parse_session_args start "$@" || return 1
+  _spawn_parse_session_args start "$@" || { _spawn_clear_session_args; return 1; }
 
   local branch="$_SPAWN_SESSION_BRANCH"
   local prompt="$_SPAWN_SESSION_PROMPT"
   local bypass="$_SPAWN_SESSION_BYPASS"
   local agent="$_SPAWN_SESSION_AGENT"
+  _spawn_clear_session_args
 
   if [[ -z "$branch" ]]; then
     _spawn_print_start_usage
@@ -819,8 +821,15 @@ _spawn_update() {
 
   if npm install -g @jxtools/spawn@latest >/dev/null 2>&1; then
     _spawn_spinner_stop
-    source "$SPAWN_HOME/spawn.sh"
+    if [[ ! -f "$SPAWN_HOME/spawn.sh" || ! -d "$SPAWN_HOME/lib" || ! -f "$SPAWN_HOME/VERSION" ]]; then
+      _spawn_error "update failed: installed runtime is incomplete"
+      return 1
+    fi
     SPAWN_VERSION="$(<"$SPAWN_HOME/VERSION")"
+    if [[ "$SPAWN_VERSION" != "$latest" ]]; then
+      _spawn_error "update failed: expected v$latest, found v$SPAWN_VERSION"
+      return 1
+    fi
     _spawn_green "✓"; echo " Updated to v$SPAWN_VERSION"
   else
     _spawn_spinner_stop
