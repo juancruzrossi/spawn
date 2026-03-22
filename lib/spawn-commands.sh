@@ -1,3 +1,24 @@
+_spawn_offer_gitignore() {
+  local repo_root="$1" layout="$2"
+  [[ "$layout" == "nested" ]] || return 0
+  local gitignore="$repo_root/.gitignore"
+  [[ -f "$gitignore" ]] && grep -qF '.worktrees' "$gitignore" 2>/dev/null && return 0
+
+  local state_dir
+  state_dir="$(_spawn_repo_state_dir "$repo_root" 2>/dev/null)" || return 0
+  [[ -f "$state_dir/.gitignore_offered" ]] && return 0
+  [[ -t 0 ]] || return 0
+
+  local answer=""
+  printf 'Add .worktrees/ to .gitignore? [Y/n] '
+  read -r answer
+  mkdir -p "$state_dir"
+  touch "$state_dir/.gitignore_offered"
+  case "${answer:-Y}" in
+    [Yy]*) printf '%s\n' '.worktrees/' >> "$gitignore" ;;
+  esac
+}
+
 _spawn_new() {
   if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     _spawn_print_new_usage
@@ -50,6 +71,8 @@ _spawn_new() {
     _spawn_run_hook setup "$repo_root" "$worktree_dir" || true
   fi
 
+  _spawn_register_repo "$repo_root"
+  _spawn_offer_gitignore "$repo_root" "$layout"
   _spawn_green "✓"; echo " Created worktree: $branch"
   _spawn_dim "  Launching $agent..."; echo ""
   _spawn_schedule_update_check
@@ -597,6 +620,230 @@ _spawn_config() {
   local target="per-repo"
   [[ "$global" == true ]] && target="global"
   echo "Set $target layout to $preset"
+}
+
+_spawn_register_repo() {
+  local repo_root="$1"
+  local registry="$SPAWN_HOME/repos"
+  mkdir -p "$SPAWN_HOME"
+  if [[ -f "$registry" ]]; then
+    grep -qxF "$repo_root" "$registry" 2>/dev/null && return 0
+  fi
+  printf '%s\n' "$repo_root" >> "$registry"
+}
+
+_spawn_registered_repos() {
+  local registry="$SPAWN_HOME/repos"
+  [[ -f "$registry" ]] || return 0
+  local clean="" _repo
+  while IFS= read -r _repo; do
+    [[ -n "$_repo" ]] || continue
+    if [[ -d "$_repo" ]] && git -C "$_repo" rev-parse --git-dir >/dev/null 2>&1; then
+      printf '%s\n' "$_repo"
+      clean+="$_repo"$'\n'
+    fi
+  done < "$registry"
+  printf '%s' "$clean" > "$registry"
+}
+
+_spawn_collect_agent_procs() {
+  local _seen="" _pid _cmd _cwd _agent _start
+  while IFS= read -r _line; do
+    [[ -n "$_line" ]] || continue
+    _line="${_line#"${_line%%[! ]*}"}"
+    _pid="${_line%% *}"
+    _cmd="${_line#* }"
+    case "$_cmd" in
+      *claude*) _agent="claude" ;;
+      *codex*)  _agent="codex" ;;
+      *)        continue ;;
+    esac
+    if [[ -d "/proc/$_pid" ]]; then
+      _cwd="$(readlink -f "/proc/$_pid/cwd" 2>/dev/null || true)"
+    elif command -v lsof >/dev/null 2>&1; then
+      _cwd="$(lsof -p "$_pid" 2>/dev/null | awk '$4=="cwd" {print $NF}')"
+    else
+      continue
+    fi
+    [[ -n "$_cwd" ]] || continue
+    case "$_seen" in *"$_cwd:"*) continue ;; esac
+    _seen+="$_cwd:"
+    _start="$(ps -o lstart= -p "$_pid" 2>/dev/null | xargs)" || _start=""
+    if [[ -n "$_start" ]]; then
+      if date -j -f "%c" "$_start" "+%s" >/dev/null 2>&1; then
+        _start="$(date -j -f "%c" "$_start" "+%s")"
+      elif date -d "$_start" "+%s" >/dev/null 2>&1; then
+        _start="$(date -d "$_start" "+%s")"
+      else
+        _start=""
+      fi
+    fi
+    printf '%s:%s:%s\n' "$_cwd" "$_agent" "${_start:-0}"
+  done < <(ps -eo pid=,command= 2>/dev/null | grep -E '[c]laude|[c]odex')
+}
+
+_spawn_elapsed_label() {
+  local elapsed=$(( $(date +%s) - $1 ))
+  if (( elapsed < 60 )); then printf 'just now'
+  elif (( elapsed < 3600 )); then printf '%sm ago' "$(( elapsed / 60 ))"
+  elif (( elapsed < 86400 )); then printf '%sh ago' "$(( elapsed / 3600 ))"
+  else printf '%sd ago' "$(( elapsed / 86400 ))"
+  fi
+}
+
+_spawn_match_agent() {
+  local wt_dir="$1" procs="$2" _proc_line _proc_cwd _proc_rest
+  while IFS= read -r _proc_line; do
+    [[ -n "$_proc_line" ]] || continue
+    _proc_cwd="${_proc_line%%:*}"
+    if [[ "$_proc_cwd" == "$wt_dir" || "$_proc_cwd" == "$wt_dir/"* ]]; then
+      _proc_rest="${_proc_line#*:}"
+      printf '%s' "$_proc_rest"
+      return 0
+    fi
+  done <<< "$procs"
+  return 1
+}
+
+_spawn_status() {
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
+    _spawn_print_status_usage
+    return 0
+  fi
+
+  local show_all=false
+  [[ "${1:-}" == "--all" ]] && show_all=true
+
+  local agent_procs
+  agent_procs="$(_spawn_collect_agent_procs)"
+
+  if [[ "$show_all" == true ]]; then
+    _spawn_status_all "$agent_procs"
+  else
+    _spawn_status_repo "$agent_procs"
+  fi
+}
+
+_spawn_status_repo() {
+  local agent_procs="$1"
+  local repo_root
+  repo_root="$(_spawn_repo_root)" || { _spawn_error "not in a git repo (use --all for global view)"; return 1; }
+
+  local layout filter
+  layout="$(_spawn_get_layout "$repo_root")"
+  filter="$(_spawn_worktree_filter "$repo_root" "$layout")"
+  local repo_parent="${repo_root%/*}"
+
+  local rows="" max_b=6 max_w=8
+  local wt_dir="" wt_branch=""
+
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*)
+        wt_dir="${line#worktree }"
+        wt_branch=""
+        ;;
+      "branch refs/heads/"*)
+        wt_branch="${line#branch refs/heads/}"
+        [[ "$wt_dir" == "$filter"* ]] || continue
+        [[ -d "$wt_dir" ]] || continue
+
+        local match=""
+        match="$(_spawn_match_agent "$wt_dir" "$agent_procs")" || true
+
+        local agent="" start_ts="" last_activity="-" display_state="○ idle"
+        if [[ -n "$match" ]]; then
+          agent="${match%%:*}"
+          start_ts="${match#*:}"
+          display_state="● active"
+          [[ "$start_ts" != "0" && -n "$start_ts" ]] && last_activity="$(_spawn_elapsed_label "$start_ts")"
+        fi
+
+        local rel_path="${wt_dir##*/}"
+        (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
+        (( ${#rel_path} > max_w )) && max_w=${#rel_path}
+        rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${agent:--}"$'\t'"${display_state}"$'\t'"${last_activity}"$'\n'
+        ;;
+    esac
+  done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
+
+  if [[ -z "$rows" ]]; then
+    echo "No spawn worktrees found."
+    return 0
+  fi
+
+  _spawn_bold "$(printf '%-*s  %-*s  %-8s  %-12s  %s' "$max_b" "BRANCH" "$max_w" "WORKTREE" "AGENT" "STATUS" "LAST ACTIVITY")"
+  echo ""
+  local _b _w _ag _s _a
+  while IFS=$'\t' read -r _b _w _ag _s _a; do
+    [[ -n "$_b" ]] || continue
+    printf '%-*s  %-*s  %-8s  %-12s  %s\n' "$max_b" "$_b" "$max_w" "$_w" "$_ag" "$_s" "$_a"
+  done <<< "$rows"
+}
+
+_spawn_status_all() {
+  local agent_procs="$1"
+  local repos
+  repos="$(_spawn_registered_repos)"
+
+  if [[ -z "$repos" ]]; then
+    echo "No spawn repositories registered yet."
+    return 0
+  fi
+
+  local rows="" max_b=6 max_w=8 max_r=4
+  local _repo layout="" filter="" repo_name="" wt_dir="" wt_branch=""
+  local agent="" last_activity="" rel_path="" display_state=""
+
+  while IFS= read -r _repo; do
+    [[ -n "$_repo" ]] || continue
+    layout="$(_spawn_get_layout "$_repo")"
+    filter="$(_spawn_worktree_filter "$_repo" "$layout")"
+    repo_name="${_repo##*/}"
+    while IFS= read -r line; do
+      case "$line" in
+        "worktree "*)
+          wt_dir="${line#worktree }"
+          wt_branch=""
+          ;;
+        "branch refs/heads/"*)
+          wt_branch="${line#branch refs/heads/}"
+          [[ "$wt_dir" == "$filter"* ]] || continue
+          [[ -d "$wt_dir" ]] || continue
+
+          local match=""
+          match="$(_spawn_match_agent "$wt_dir" "$agent_procs")" || true
+
+          agent="" last_activity="-" display_state="○ idle"
+          if [[ -n "$match" ]]; then
+            agent="${match%%:*}"
+            local start_ts="${match#*:}"
+            display_state="● active"
+            [[ "$start_ts" != "0" && -n "$start_ts" ]] && last_activity="$(_spawn_elapsed_label "$start_ts")"
+          fi
+
+          rel_path="${wt_dir##*/}"
+          (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
+          (( ${#rel_path} > max_w )) && max_w=${#rel_path}
+          (( ${#repo_name} > max_r )) && max_r=${#repo_name}
+          rows+="${repo_name}"$'\t'"${wt_branch}"$'\t'"${rel_path}"$'\t'"${agent:--}"$'\t'"${display_state}"$'\t'"${last_activity}"$'\n'
+          ;;
+      esac
+    done < <(git -C "$_repo" worktree list --porcelain 2>/dev/null)
+  done <<< "$repos"
+
+  if [[ -z "$rows" ]]; then
+    echo "No spawn worktrees found across registered repos."
+    return 0
+  fi
+
+  _spawn_bold "$(printf '%-*s  %-*s  %-*s  %-8s  %-12s  %s' "$max_r" "REPO" "$max_b" "BRANCH" "$max_w" "WORKTREE" "AGENT" "STATUS" "LAST ACTIVITY")"
+  echo ""
+  local _r _b _w _ag _s _a
+  while IFS=$'\t' read -r _r _b _w _ag _s _a; do
+    [[ -n "$_r" ]] || continue
+    printf '%-*s  %-*s  %-*s  %-8s  %-12s  %s\n' "$max_r" "$_r" "$max_b" "$_b" "$max_w" "$_w" "$_ag" "$_s" "$_a"
+  done <<< "$rows"
 }
 
 _spawn_update() {

@@ -70,8 +70,10 @@ spawn start feature/db-indexes -b
 | --- | --- |
 | `spawn new <branch>` | Creates a branch and worktree, then opens the agent. |
 | `spawn start <branch>` | Reopens an existing worktree and resumes the session. |
-| `spawn cd [branch]` | Jumps to a worktree. No args goes to repo root. |
+| `spawn status` | Shows worktree states and active agent sessions. |
+| `spawn status --all` | Shows all spawn worktrees across every registered repository. |
 | `spawn ls` | Lists spawn-managed branches. |
+| `spawn cd [branch]` | Jumps to a worktree. No args goes to repo root. |
 | `spawn merge [branch]` | Merges a worktree branch into the primary checkout. |
 | `spawn rm [branch]` | Removes a worktree and its branch. |
 | `spawn rm --all` | Removes all spawn worktrees after confirmation. |
@@ -89,7 +91,7 @@ spawn start feature/db-indexes -b
 | `-p`, `--prompt <text>` | `new`, `start` | Seeds the first message. Quote if it contains spaces. |
 | `-f`, `--from <ref>` | `new` | Base branch to create from. Defaults to `HEAD`. |
 | `-f`, `--force` | `rm` | Force-removes a worktree with uncommitted changes. |
-| `--all` | `rm` | Removes all spawn worktrees (interactive confirmation). |
+| `--all` | `rm`, `status` | In `rm`: removes all worktrees. In `status`: shows worktrees across all repos. |
 | `--squash` | `merge` | Squash-merges instead of a regular merge. |
 | `--replace` | `init` | Overwrites an existing setup hook. |
 | `--global` | `config set` | Applies the layout globally instead of per-repo. |
