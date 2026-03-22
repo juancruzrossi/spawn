@@ -1,10 +1,10 @@
 # spawn
 
-CLI tool for running multiple AI coding agents in parallel.
+CLI tool for working on multiple features at the same time in the same repo — each in its own git worktree with its own AI agent. Create, resume, merge, and clean up parallel sessions from a single command.
 
-`spawn` wraps `git worktree` so each agent session gets its own isolated working directory and branch. You can create, resume, and clean up sessions from a single command while the main checkout stays untouched.
-
-Supported agents: **Claude Code** and **Codex CLI**.
+Supported agents:
+- Claude Code
+- Codex
 
 ## Install
 
@@ -20,8 +20,8 @@ source ~/.zshrc   # or source ~/.bashrc
 
 ### Requirements
 
-- **Node.js 18+** (for npm installation)
-- **Git** (required)
+- **Node.js 18+**
+- **Git**
 - **AI Provider** (at least one):
   - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (default)
   - [Codex](https://github.com/openai/codex)
@@ -31,8 +31,6 @@ source ~/.zshrc   # or source ~/.bashrc
 ```bash
 spawn update
 ```
-
-spawn automatically checks for new versions once a day when you run `spawn new` or `spawn start`.
 
 ## Workflow
 
@@ -61,7 +59,8 @@ Resume the feature the next day, right where the agent left off:
 spawn start feature/db-indexes -b
 ```
 
-**`new`** = new worktree, new session. **`start`** = existing worktree, resume session.
+**`new`** = new worktree, new session.\
+**`start`** = existing worktree, resume session.
 
 ## Commands
 
@@ -70,12 +69,10 @@ spawn start feature/db-indexes -b
 | `spawn new <branch>` | Creates a branch and worktree, then opens the agent. |
 | `spawn start <branch>` | Reopens an existing worktree and resumes the session. |
 | `spawn status` | Shows worktree states and active agent sessions. |
-| `spawn status --all` | Shows all spawn worktrees across every registered repository. |
 | `spawn ls` | Lists spawn-managed branches. |
 | `spawn cd [branch]` | Jumps to a worktree. No args goes to repo root. |
 | `spawn merge [branch]` | Merges a worktree branch into the primary checkout. |
 | `spawn rm [branch]` | Removes a worktree and its branch. |
-| `spawn rm --all` | Removes all spawn worktrees after confirmation. |
 | `spawn init` | Generates a setup script that runs automatically on each new worktree (install deps, link secrets, etc.). |
 | `spawn config set layout <preset>` | Sets `nested`, `outer-nested`, or `sibling`. |
 | `spawn update` | Checks for a newer version on npm and updates. |
@@ -101,8 +98,3 @@ spawn start feature/db-indexes -b
 | --- | --- |
 | `SPAWN_AGENT=codex` | Changes the default agent. |
 | `SPAWN_BYPASS=1` | Enables bypass mode by default. |
-| `NO_COLOR=1` | Disables colored output. |
-
-## License
-
-ISC
