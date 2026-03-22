@@ -150,6 +150,25 @@ EOF
   [[ "$output" == *"CLAUDE:"* ]]
 }
 
+@test "_spawn_run_hook forwards repo and worktree paths to hooks" {
+  run bash -c '
+    source "$1/spawn.sh"
+    tmp_dir="$(mktemp -d)"
+    hook_script="$tmp_dir/setup"
+    capture_file="$tmp_dir/capture"
+    cat > "$hook_script" <<EOF
+#!/bin/sh
+printf "%s|%s\n" "\$1" "\$2" > "$capture_file"
+EOF
+    chmod +x "$hook_script"
+    _spawn_repo_hook_file() { printf "%s\n" "$hook_script"; }
+    _spawn_run_hook setup "$tmp_dir/repo" "$tmp_dir/wt"
+    cat "$capture_file"
+  ' -- "$PROJECT_DIR"
+  [ "$status" -eq 0 ]
+  [[ "$output" == */repo\|*/wt ]]
+}
+
 @test "init fails fast without an interactive terminal" {
   run bash -c '
     source "$1/spawn.sh"
@@ -172,6 +191,19 @@ EOF
   ' -- "$PROJECT_DIR"
   [ "$status" -eq 0 ]
   [[ "$output" == spawn\ v1.3.0* ]]
+}
+
+@test "postinstall exits non-zero when runtime copy fails" {
+  run bash -c '
+    project_dir="$1"
+    tmp_dir="$(mktemp -d)"
+    mkdir -p "$tmp_dir/scripts" "$tmp_dir/home"
+    cp "$project_dir/scripts/postinstall.js" "$tmp_dir/scripts/postinstall.js"
+    cp "$project_dir/package.json" "$tmp_dir/package.json"
+    HOME="$tmp_dir/home" SHELL=/bin/bash node "$tmp_dir/scripts/postinstall.js"
+  ' -- "$PROJECT_DIR"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"spawn: failed to copy runtime files:"* ]]
 }
 
 @test "rm deletes the branch even when it is not merged" {

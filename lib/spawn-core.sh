@@ -696,12 +696,13 @@ _spawn_run_agent() {
 _spawn_run_hook() {
   local hook_name="$1"
   local repo_root="$2"
+  local worktree_dir="$3"
   local repo_hook
 
   repo_hook="$(_spawn_repo_hook_file "$repo_root" "$hook_name")" || return 1
 
   if [[ -x "$repo_hook" ]]; then
-    "$repo_hook"
+    "$repo_hook" "$repo_root" "$worktree_dir"
     return 0
   fi
 

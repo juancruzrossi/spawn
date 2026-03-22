@@ -30,7 +30,7 @@ try {
   cpSync(join(packageDir, 'lib'), libDest, { recursive: true })
 } catch (err) {
   console.error('spawn: failed to copy runtime files:', err.message)
-  process.exit(0)
+  process.exit(1)
 }
 
 // Add source line to shell rc if not already present
