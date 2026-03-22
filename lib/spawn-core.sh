@@ -286,6 +286,15 @@ _spawn_repo_root() {
   (CDPATH= cd -- "$parent_dir" && pwd -P)
 }
 
+_spawn_require_repo_root() {
+  local repo_root
+  repo_root="$(_spawn_repo_root)" || {
+    _spawn_error "not in a git repo"
+    return 1
+  }
+  printf '%s\n' "$repo_root"
+}
+
 _spawn_safe_name() {
   printf '%s\n' "${1//\//-}"
 }
@@ -401,6 +410,27 @@ _spawn_worktree_dir() {
     sibling) printf '%s\n' "${repo_root%/*}/${repo_root##*/}-$safe_name" ;;
     *) printf '%s\n' "$repo_root/.worktrees/$safe_name" ;;
   esac
+}
+
+_spawn_spawn_worktree_pairs() {
+  local repo_root="$1"
+  local layout="${2:-$(_spawn_get_layout "$repo_root")}"
+  local filter
+  filter="$(_spawn_worktree_filter "$repo_root" "$layout")"
+
+  local line wt_dir="" wt_branch=""
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*)
+        wt_dir="${line#worktree }"
+        wt_branch=""
+        ;;
+      "branch refs/heads/"*)
+        wt_branch="${line#branch refs/heads/}"
+        [[ "$wt_dir" == "$filter"* ]] && printf '%s\t%s\n' "$wt_dir" "$wt_branch"
+        ;;
+    esac
+  done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
 }
 
 _spawn_detect_worktree_branch() {
@@ -574,6 +604,15 @@ _spawn_default_agent() {
   printf '%s\n' "${SPAWN_AGENT:-claude}"
 }
 
+_spawn_clear_session_args() {
+  unset \
+    _SPAWN_SESSION_BRANCH \
+    _SPAWN_SESSION_PROMPT \
+    _SPAWN_SESSION_BYPASS \
+    _SPAWN_SESSION_AGENT \
+    _SPAWN_SESSION_FROM
+}
+
 _spawn_validate_agent() {
   case "$1" in
     claude|codex) return 0 ;;
@@ -589,6 +628,7 @@ _spawn_parse_session_args() {
   local mode="$1"
   shift
 
+  _spawn_clear_session_args
   _SPAWN_SESSION_BRANCH=""
   _SPAWN_SESSION_PROMPT=""
   _SPAWN_SESSION_BYPASS="${SPAWN_BYPASS:-}"
@@ -696,12 +736,13 @@ _spawn_run_agent() {
 _spawn_run_hook() {
   local hook_name="$1"
   local repo_root="$2"
+  local worktree_dir="$3"
   local repo_hook
 
   repo_hook="$(_spawn_repo_hook_file "$repo_root" "$hook_name")" || return 1
 
   if [[ -x "$repo_hook" ]]; then
-    "$repo_hook"
+    "$repo_hook" "$repo_root" "$worktree_dir"
     return 0
   fi
 

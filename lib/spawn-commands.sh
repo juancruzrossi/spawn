@@ -30,13 +30,14 @@ _spawn_new() {
     return 1
   fi
 
-  _spawn_parse_session_args new "$@" || return 1
+  _spawn_parse_session_args new "$@" || { _spawn_clear_session_args; return 1; }
 
   local branch="$_SPAWN_SESSION_BRANCH"
   local prompt="$_SPAWN_SESSION_PROMPT"
   local bypass="$_SPAWN_SESSION_BYPASS"
   local agent="$_SPAWN_SESSION_AGENT"
   local from_ref="$_SPAWN_SESSION_FROM"
+  _spawn_clear_session_args
 
   if [[ -z "$branch" ]]; then
     _spawn_print_new_usage
@@ -44,7 +45,7 @@ _spawn_new() {
   fi
 
   local repo_root
-  repo_root="$(_spawn_repo_root)" || { _spawn_error "not in a git repo"; return 1; }
+  repo_root="$(_spawn_require_repo_root)" || return 1
 
   local layout
   layout="$(_spawn_get_layout "$repo_root")"
@@ -90,12 +91,13 @@ _spawn_start() {
     return 1
   fi
 
-  _spawn_parse_session_args start "$@" || return 1
+  _spawn_parse_session_args start "$@" || { _spawn_clear_session_args; return 1; }
 
   local branch="$_SPAWN_SESSION_BRANCH"
   local prompt="$_SPAWN_SESSION_PROMPT"
   local bypass="$_SPAWN_SESSION_BYPASS"
   local agent="$_SPAWN_SESSION_AGENT"
+  _spawn_clear_session_args
 
   if [[ -z "$branch" ]]; then
     _spawn_print_start_usage
@@ -103,13 +105,10 @@ _spawn_start() {
   fi
 
   local repo_root
-  repo_root="$(_spawn_repo_root)" || { _spawn_error "not in a git repo"; return 1; }
-
-  local layout
-  layout="$(_spawn_get_layout "$repo_root")"
+  repo_root="$(_spawn_require_repo_root)" || return 1
 
   local worktree_dir
-  worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch" "$layout")"
+  worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch")"
 
   if [[ ! -d "$worktree_dir" ]]; then
     _spawn_error "worktree not found: $worktree_dir"
@@ -131,7 +130,7 @@ _spawn_cd() {
   fi
 
   local repo_root
-  repo_root="$(_spawn_repo_root)" || { _spawn_error "not in a git repo"; return 1; }
+  repo_root="$(_spawn_require_repo_root)" || return 1
 
   if [[ -z "${1:-}" ]]; then
     cd "$repo_root" || return 1
@@ -139,10 +138,8 @@ _spawn_cd() {
   fi
 
   local branch="$1"
-  local layout
-  layout="$(_spawn_get_layout "$repo_root")"
   local worktree_dir
-  worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch" "$layout")"
+  worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch")"
 
   if [[ ! -d "$worktree_dir" ]]; then
     _spawn_error "worktree not found: $worktree_dir"
@@ -160,31 +157,16 @@ _spawn_ls() {
   fi
 
   local repo_root
-  repo_root="$(_spawn_repo_root)" || { _spawn_error "not in a git repo"; return 1; }
-
-  local layout
-  layout="$(_spawn_get_layout "$repo_root")"
+  repo_root="$(_spawn_require_repo_root)" || return 1
   local repo_parent="${repo_root%/*}"
-  local filter
-  filter="$(_spawn_worktree_filter "$repo_root" "$layout")"
 
   local rows="" max_w=6
   local wt_dir="" wt_branch=""
-  while IFS= read -r line; do
-    case "$line" in
-      "worktree "*)
-        wt_dir="${line#worktree }"
-        wt_branch=""
-        ;;
-      "branch refs/heads/"*)
-        wt_branch="${line#branch refs/heads/}"
-        if [[ "$wt_dir" == "$filter"* ]]; then
-          (( ${#wt_branch} > max_w )) && max_w=${#wt_branch}
-          rows+="${wt_branch}"$'\t'"${wt_dir#$repo_parent/}"$'\n'
-        fi
-        ;;
-    esac
-  done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
+  while IFS=$'\t' read -r wt_dir wt_branch; do
+    [[ -n "$wt_dir" ]] || continue
+    (( ${#wt_branch} > max_w )) && max_w=${#wt_branch}
+    rows+="${wt_branch}"$'\t'"${wt_dir#$repo_parent/}"$'\n'
+  done < <(_spawn_spawn_worktree_pairs "$repo_root")
 
   if [[ -z "$rows" ]]; then
     echo "No spawn worktrees found."
@@ -218,7 +200,7 @@ _spawn_merge() {
   done
 
   local repo_root
-  repo_root="$(_spawn_repo_root)" || { _spawn_error "not in a git repo"; return 1; }
+  repo_root="$(_spawn_require_repo_root)" || return 1
 
   local layout
   layout="$(_spawn_get_layout "$repo_root")"
@@ -289,7 +271,7 @@ _spawn_rm() {
   done
 
   local repo_root
-  repo_root="$(_spawn_repo_root)" || { _spawn_error "not in a git repo"; return 1; }
+  repo_root="$(_spawn_require_repo_root)" || return 1
 
   if [[ "$branch" == "--all" ]]; then
     _spawn_rm_all "$repo_root"
@@ -351,24 +333,11 @@ _spawn_rm_all() {
     return 0
   fi
 
-  local filter
-  filter="$(_spawn_worktree_filter "$repo_root" "$layout")"
-
   local wt_pairs="" wt_dir="" wt_branch=""
-  while IFS= read -r line; do
-    case "$line" in
-      "worktree "*)
-        wt_dir="${line#worktree }"
-        wt_branch=""
-        ;;
-      "branch refs/heads/"*)
-        wt_branch="${line#branch refs/heads/}"
-        if [[ "$wt_dir" == "$filter"* ]]; then
-          wt_pairs+="${wt_dir}"$'\t'"${wt_branch}"$'\n'
-        fi
-        ;;
-    esac
-  done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
+  while IFS=$'\t' read -r wt_dir wt_branch; do
+    [[ -n "$wt_dir" ]] || continue
+    wt_pairs+="${wt_dir}"$'\t'"${wt_branch}"$'\n'
+  done < <(_spawn_spawn_worktree_pairs "$repo_root" "$layout")
 
   if [[ -z "$wt_pairs" ]]; then
     echo "No spawn worktrees to remove."
@@ -461,7 +430,7 @@ _spawn_init() {
   done
 
   local repo_root
-  repo_root="$(_spawn_repo_root)" || { _spawn_error "not in a git repo"; return 1; }
+  repo_root="$(_spawn_require_repo_root)" || return 1
   _spawn_validate_agent "$agent" || return 1
 
   case "$agent" in
@@ -603,12 +572,10 @@ _spawn_config() {
   fi
 
   if [[ -n "$repo_root" ]]; then
-    local wt_filter
-    wt_filter="$(_spawn_worktree_filter "$repo_root")"
-    local existing=0 _wt_line
-    while IFS= read -r _wt_line; do
-      [[ "$_wt_line" == "worktree $wt_filter"* ]] && ((existing++))
-    done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
+    local existing=0 _wt_dir _wt_branch
+    while IFS=$'\t' read -r _wt_dir _wt_branch; do
+      [[ -n "$_wt_dir" ]] && ((existing++))
+    done < <(_spawn_spawn_worktree_pairs "$repo_root")
     if [[ "$existing" -gt 0 ]]; then
       echo "Warning: $existing existing worktrees use the current layout."
       echo "Changing layout won't move them. Remove them first with 'spawn rm --all'."
@@ -666,8 +633,8 @@ _spawn_collect_agent_procs() {
       continue
     fi
     [[ -n "$_cwd" ]] || continue
-    case "$_seen" in *"$_cwd:"*) continue ;; esac
-    _seen+="$_cwd:"
+    case $'\n'"$_seen" in *$'\n'"$_cwd"$'\n'*) continue ;; esac
+    _seen+="${_cwd}"$'\n'
     _start="$(ps -o lstart= -p "$_pid" 2>/dev/null | xargs)" || _start=""
     if [[ -n "$_start" ]]; then
       if date -j -f "%c" "$_start" "+%s" >/dev/null 2>&1; then
@@ -692,13 +659,15 @@ _spawn_elapsed_label() {
 }
 
 _spawn_match_agent() {
-  local wt_dir="$1" procs="$2" _proc_line _proc_cwd _proc_rest
+  local wt_dir="$1" procs="$2" _proc_line _proc_cwd _proc_rest _proc_agent _proc_start
   while IFS= read -r _proc_line; do
     [[ -n "$_proc_line" ]] || continue
-    _proc_cwd="${_proc_line%%:*}"
+    _proc_start="${_proc_line##*:}"
+    _proc_rest="${_proc_line%:*}"
+    _proc_agent="${_proc_rest##*:}"
+    _proc_cwd="${_proc_rest%:*}"
     if [[ "$_proc_cwd" == "$wt_dir" || "$_proc_cwd" == "$wt_dir/"* ]]; then
-      _proc_rest="${_proc_line#*:}"
-      printf '%s' "$_proc_rest"
+      printf '%s:%s' "$_proc_agent" "$_proc_start"
       return 0
     fi
   done <<< "$procs"
@@ -729,43 +698,28 @@ _spawn_status_repo() {
   local repo_root
   repo_root="$(_spawn_repo_root)" || { _spawn_error "not in a git repo (use --all for global view)"; return 1; }
 
-  local layout filter
-  layout="$(_spawn_get_layout "$repo_root")"
-  filter="$(_spawn_worktree_filter "$repo_root" "$layout")"
-  local repo_parent="${repo_root%/*}"
-
   local rows="" max_b=6 max_w=8
   local wt_dir="" wt_branch=""
 
-  while IFS= read -r line; do
-    case "$line" in
-      "worktree "*)
-        wt_dir="${line#worktree }"
-        wt_branch=""
-        ;;
-      "branch refs/heads/"*)
-        wt_branch="${line#branch refs/heads/}"
-        [[ "$wt_dir" == "$filter"* ]] || continue
-        [[ -d "$wt_dir" ]] || continue
+  while IFS=$'\t' read -r wt_dir wt_branch; do
+    [[ -d "$wt_dir" ]] || continue
 
-        local match=""
-        match="$(_spawn_match_agent "$wt_dir" "$agent_procs")" || true
+    local match=""
+    match="$(_spawn_match_agent "$wt_dir" "$agent_procs")" || true
 
-        local agent="" start_ts="" last_activity="-" display_state="○ idle"
-        if [[ -n "$match" ]]; then
-          agent="${match%%:*}"
-          start_ts="${match#*:}"
-          display_state="● active"
-          [[ "$start_ts" != "0" && -n "$start_ts" ]] && last_activity="$(_spawn_elapsed_label "$start_ts")"
-        fi
+    local agent="" start_ts="" last_activity="-" display_state="○ idle"
+    if [[ -n "$match" ]]; then
+      agent="${match%%:*}"
+      start_ts="${match#*:}"
+      display_state="● active"
+      [[ "$start_ts" != "0" && -n "$start_ts" ]] && last_activity="$(_spawn_elapsed_label "$start_ts")"
+    fi
 
-        local rel_path="${wt_dir##*/}"
-        (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
-        (( ${#rel_path} > max_w )) && max_w=${#rel_path}
-        rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${agent:--}"$'\t'"${display_state}"$'\t'"${last_activity}"$'\n'
-        ;;
-    esac
-  done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
+    local rel_path="${wt_dir##*/}"
+    (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
+    (( ${#rel_path} > max_w )) && max_w=${#rel_path}
+    rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${agent:--}"$'\t'"${display_state}"$'\t'"${last_activity}"$'\n'
+  done < <(_spawn_spawn_worktree_pairs "$repo_root")
 
   if [[ -z "$rows" ]]; then
     echo "No spawn worktrees found."
@@ -792,44 +746,32 @@ _spawn_status_all() {
   fi
 
   local rows="" max_b=6 max_w=8 max_r=4
-  local _repo layout="" filter="" repo_name="" wt_dir="" wt_branch=""
+  local _repo repo_name="" wt_dir="" wt_branch=""
   local agent="" last_activity="" rel_path="" display_state=""
 
   while IFS= read -r _repo; do
     [[ -n "$_repo" ]] || continue
-    layout="$(_spawn_get_layout "$_repo")"
-    filter="$(_spawn_worktree_filter "$_repo" "$layout")"
     repo_name="${_repo##*/}"
-    while IFS= read -r line; do
-      case "$line" in
-        "worktree "*)
-          wt_dir="${line#worktree }"
-          wt_branch=""
-          ;;
-        "branch refs/heads/"*)
-          wt_branch="${line#branch refs/heads/}"
-          [[ "$wt_dir" == "$filter"* ]] || continue
-          [[ -d "$wt_dir" ]] || continue
+    while IFS=$'\t' read -r wt_dir wt_branch; do
+      [[ -d "$wt_dir" ]] || continue
 
-          local match=""
-          match="$(_spawn_match_agent "$wt_dir" "$agent_procs")" || true
+      local match=""
+      match="$(_spawn_match_agent "$wt_dir" "$agent_procs")" || true
 
-          agent="" last_activity="-" display_state="○ idle"
-          if [[ -n "$match" ]]; then
-            agent="${match%%:*}"
-            local start_ts="${match#*:}"
-            display_state="● active"
-            [[ "$start_ts" != "0" && -n "$start_ts" ]] && last_activity="$(_spawn_elapsed_label "$start_ts")"
-          fi
+      agent="" last_activity="-" display_state="○ idle"
+      if [[ -n "$match" ]]; then
+        agent="${match%%:*}"
+        local start_ts="${match#*:}"
+        display_state="● active"
+        [[ "$start_ts" != "0" && -n "$start_ts" ]] && last_activity="$(_spawn_elapsed_label "$start_ts")"
+      fi
 
-          rel_path="${wt_dir##*/}"
-          (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
-          (( ${#rel_path} > max_w )) && max_w=${#rel_path}
-          (( ${#repo_name} > max_r )) && max_r=${#repo_name}
-          rows+="${repo_name}"$'\t'"${wt_branch}"$'\t'"${rel_path}"$'\t'"${agent:--}"$'\t'"${display_state}"$'\t'"${last_activity}"$'\n'
-          ;;
-      esac
-    done < <(git -C "$_repo" worktree list --porcelain 2>/dev/null)
+      rel_path="${wt_dir##*/}"
+      (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
+      (( ${#rel_path} > max_w )) && max_w=${#rel_path}
+      (( ${#repo_name} > max_r )) && max_r=${#repo_name}
+      rows+="${repo_name}"$'\t'"${wt_branch}"$'\t'"${rel_path}"$'\t'"${agent:--}"$'\t'"${display_state}"$'\t'"${last_activity}"$'\n'
+    done < <(_spawn_spawn_worktree_pairs "$_repo")
   done <<< "$repos"
 
   if [[ -z "$rows" ]]; then
@@ -879,8 +821,15 @@ _spawn_update() {
 
   if npm install -g @jxtools/spawn@latest >/dev/null 2>&1; then
     _spawn_spinner_stop
-    source "$SPAWN_HOME/spawn.sh"
+    if [[ ! -f "$SPAWN_HOME/spawn.sh" || ! -d "$SPAWN_HOME/lib" || ! -f "$SPAWN_HOME/VERSION" ]]; then
+      _spawn_error "update failed: installed runtime is incomplete"
+      return 1
+    fi
     SPAWN_VERSION="$(<"$SPAWN_HOME/VERSION")"
+    if [[ "$SPAWN_VERSION" != "$latest" ]]; then
+      _spawn_error "update failed: expected v$latest, found v$SPAWN_VERSION"
+      return 1
+    fi
     _spawn_green "✓"; echo " Updated to v$SPAWN_VERSION"
   else
     _spawn_spinner_stop
