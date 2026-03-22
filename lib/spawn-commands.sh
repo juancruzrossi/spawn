@@ -613,7 +613,6 @@ _spawn_status() {
   local filter
   filter="$(_spawn_worktree_filter "$repo_root" "$layout")"
 
-  # Collect agent processes: "cwd:agent" per line (macOS + Linux, bash 3+)
   local _agent_procs=""
   local _pid _cwd _cmd _agent
   while IFS= read -r _line; do
@@ -650,7 +649,6 @@ _spawn_status() {
         wt_branch="${line#branch refs/heads/}"
         [[ "$wt_dir" == "$filter"* ]] || continue
 
-        # Detect active agent
         local state="idle" agent="" _proc_line
         while IFS= read -r _proc_line; do
           [[ -n "$_proc_line" ]] || continue
@@ -663,7 +661,6 @@ _spawn_status() {
           fi
         done <<< "$_agent_procs"
 
-        # Last activity: most recent commit or file modification
         local last_ts=""
         local commit_ts
         commit_ts="$(git -C "$wt_dir" log -1 --format='%ct' 2>/dev/null || true)"
