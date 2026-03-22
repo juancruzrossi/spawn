@@ -25,7 +25,7 @@ jobs:
       - name: Install QA dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y shellcheck bats
+          sudo apt-get install -y bats zsh
 
       - name: Lint
         run: make lint
