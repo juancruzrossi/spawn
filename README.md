@@ -10,13 +10,12 @@ Supported agents: **Claude Code** and **Codex CLI**.
 
 ```bash
 npm install -g @jxtools/spawn
-source ~/.zshrc   # or source ~/.bashrc
 ```
 
-Then add `.worktrees/` to your `.gitignore`:
+Then reload your shell:
 
 ```bash
-echo '.worktrees/' >> .gitignore
+source ~/.zshrc   # or source ~/.bashrc
 ```
 
 ### Requirements
