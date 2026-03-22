@@ -625,7 +625,7 @@ _spawn_registered_repos() {
 }
 
 _spawn_collect_agent_procs() {
-  local _seen="" _pid _cmd _cwd _agent
+  local _seen="" _pid _cmd _cwd _agent _start
   while IFS= read -r _line; do
     [[ -n "$_line" ]] || continue
     _line="${_line#"${_line%%[! ]*}"}"
@@ -646,7 +646,17 @@ _spawn_collect_agent_procs() {
     [[ -n "$_cwd" ]] || continue
     case "$_seen" in *"$_cwd:"*) continue ;; esac
     _seen+="$_cwd:"
-    printf '%s:%s\n' "$_cwd" "$_agent"
+    _start="$(ps -o lstart= -p "$_pid" 2>/dev/null | xargs)" || _start=""
+    if [[ -n "$_start" ]]; then
+      if date -j -f "%c" "$_start" "+%s" >/dev/null 2>&1; then
+        _start="$(date -j -f "%c" "$_start" "+%s")"
+      elif date -d "$_start" "+%s" >/dev/null 2>&1; then
+        _start="$(date -d "$_start" "+%s")"
+      else
+        _start=""
+      fi
+    fi
+    printf '%s:%s:%s\n' "$_cwd" "$_agent" "${_start:-0}"
   done < <(ps -eo pid=,command= 2>/dev/null | grep -E '[c]laude|[c]odex')
 }
 
@@ -660,12 +670,13 @@ _spawn_elapsed_label() {
 }
 
 _spawn_match_agent() {
-  local wt_dir="$1" procs="$2" _proc_line _proc_cwd
+  local wt_dir="$1" procs="$2" _proc_line _proc_cwd _proc_rest
   while IFS= read -r _proc_line; do
     [[ -n "$_proc_line" ]] || continue
     _proc_cwd="${_proc_line%%:*}"
     if [[ "$_proc_cwd" == "$wt_dir" || "$_proc_cwd" == "$wt_dir/"* ]]; then
-      printf '%s' "${_proc_line##*:}"
+      _proc_rest="${_proc_line#*:}"
+      printf '%s' "$_proc_rest"
       return 0
     fi
   done <<< "$procs"
@@ -715,19 +726,20 @@ _spawn_status_repo() {
         [[ "$wt_dir" == "$filter"* ]] || continue
         [[ -d "$wt_dir" ]] || continue
 
-        local agent=""
-        agent="$(_spawn_match_agent "$wt_dir" "$agent_procs")" || true
+        local match=""
+        match="$(_spawn_match_agent "$wt_dir" "$agent_procs")" || true
 
-        local last_activity="-"
-        local commit_ts
-        commit_ts="$(git -C "$wt_dir" log -1 --format='%ct' 2>/dev/null || true)"
-        [[ -n "$commit_ts" ]] && last_activity="$(_spawn_elapsed_label "$commit_ts")"
+        local agent="" start_ts="" last_activity="-" display_state="○ idle"
+        if [[ -n "$match" ]]; then
+          agent="${match%%:*}"
+          start_ts="${match#*:}"
+          display_state="● active"
+          [[ "$start_ts" != "0" && -n "$start_ts" ]] && last_activity="$(_spawn_elapsed_label "$start_ts")"
+        fi
 
         local rel_path="${wt_dir##*/}"
         (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
         (( ${#rel_path} > max_w )) && max_w=${#rel_path}
-        local display_state="○ idle"
-        [[ -n "$agent" ]] && display_state="● active"
         rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${agent:--}"$'\t'"${display_state}"$'\t'"${last_activity}"$'\n'
         ;;
     esac
@@ -759,7 +771,7 @@ _spawn_status_all() {
 
   local rows="" max_b=6 max_w=8 max_r=4
   local _repo layout="" filter="" repo_name="" wt_dir="" wt_branch=""
-  local agent="" last_activity="" commit_ts="" rel_path="" display_state=""
+  local agent="" last_activity="" rel_path="" display_state=""
 
   while IFS= read -r _repo; do
     [[ -n "$_repo" ]] || continue
@@ -777,20 +789,21 @@ _spawn_status_all() {
           [[ "$wt_dir" == "$filter"* ]] || continue
           [[ -d "$wt_dir" ]] || continue
 
-          agent=""
-          agent="$(_spawn_match_agent "$wt_dir" "$agent_procs")" || true
+          local match=""
+          match="$(_spawn_match_agent "$wt_dir" "$agent_procs")" || true
 
-          last_activity="-"
-          commit_ts=""
-          commit_ts="$(git -C "$wt_dir" log -1 --format='%ct' 2>/dev/null || true)"
-          [[ -n "$commit_ts" ]] && last_activity="$(_spawn_elapsed_label "$commit_ts")"
+          agent="" last_activity="-" display_state="○ idle"
+          if [[ -n "$match" ]]; then
+            agent="${match%%:*}"
+            local start_ts="${match#*:}"
+            display_state="● active"
+            [[ "$start_ts" != "0" && -n "$start_ts" ]] && last_activity="$(_spawn_elapsed_label "$start_ts")"
+          fi
 
           rel_path="${wt_dir##*/}"
           (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
           (( ${#rel_path} > max_w )) && max_w=${#rel_path}
           (( ${#repo_name} > max_r )) && max_r=${#repo_name}
-          display_state="○ idle"
-          [[ -n "$agent" ]] && display_state="● active"
           rows+="${repo_name}"$'\t'"${wt_branch}"$'\t'"${rel_path}"$'\t'"${agent:--}"$'\t'"${display_state}"$'\t'"${last_activity}"$'\n'
           ;;
       esac
