@@ -15,8 +15,7 @@ _spawn_offer_gitignore() {
   mkdir -p "$state_dir"
   touch "$state_dir/.gitignore_offered"
   case "${answer:-Y}" in
-    [Yy]*) printf '%s\n' '.worktrees/' >> "$gitignore"
-           _spawn_green "✓"; echo " Added .worktrees/ to .gitignore" ;;
+    [Yy]*) printf '%s\n' '.worktrees/' >> "$gitignore" ;;
   esac
 }
 
