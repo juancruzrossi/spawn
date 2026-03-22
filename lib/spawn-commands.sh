@@ -726,7 +726,7 @@ _spawn_status_repo() {
     return 0
   fi
 
-  _spawn_bold "$(printf '%-*s  %-*s  %-8s  %-12s  %s' "$max_b" "BRANCH" "$max_w" "WORKTREE" "AGENT" "STATE" "LAST ACTIVITY")"
+  _spawn_bold "$(printf '%-*s  %-*s  %-8s  %-12s  %s' "$max_b" "BRANCH" "$max_w" "WORKTREE" "AGENT" "STATUS" "LAST ACTIVITY")"
   echo ""
   local _b _w _ag _s _a
   while IFS=$'\t' read -r _b _w _ag _s _a; do
@@ -770,7 +770,7 @@ _spawn_status_all() {
     return 0
   fi
 
-  _spawn_bold "$(printf '%-*s  %-*s  %-8s  %-12s  %s' "$max_b" "BRANCH" "$max_w" "WORKTREE" "AGENT" "STATE" "LAST ACTIVITY")"
+  _spawn_bold "$(printf '%-*s  %-*s  %-8s  %-12s  %s' "$max_b" "BRANCH" "$max_w" "WORKTREE" "AGENT" "STATUS" "LAST ACTIVITY")"
   echo ""
   local _b _w _ag _s _a
   while IFS=$'\t' read -r _b _w _ag _s _a; do
