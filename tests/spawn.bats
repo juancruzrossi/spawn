@@ -218,11 +218,38 @@ EOF
     tmp_dir="$(mktemp -d)"
     mkdir -p "$tmp_dir/scripts" "$tmp_dir/home"
     cp "$project_dir/scripts/postinstall.js" "$tmp_dir/scripts/postinstall.js"
+    cp "$project_dir/scripts/install-runtime.js" "$tmp_dir/scripts/install-runtime.js"
     cp "$project_dir/package.json" "$tmp_dir/package.json"
     HOME="$tmp_dir/home" SHELL=/bin/bash node "$tmp_dir/scripts/postinstall.js"
   ' -- "$PROJECT_DIR"
   [ "$status" -eq 1 ]
   [[ "$output" == *"spawn: failed to copy runtime files:"* ]]
+}
+
+@test "install.sh installs runtime into ~/.spawn" {
+  run bash -c '
+    tmp_home="$(mktemp -d)"
+    HOME="$tmp_home" SHELL=/bin/bash sh "$1/install.sh"
+    test -f "$tmp_home/.spawn/spawn.sh"
+    test -f "$tmp_home/.spawn/VERSION"
+    test -d "$tmp_home/.spawn/lib"
+    grep -qF ".spawn/spawn.sh" "$tmp_home/.bashrc"
+  ' -- "$PROJECT_DIR"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"spawn installed successfully"* ]]
+}
+
+@test "postinstall installs runtime into ~/.spawn" {
+  run bash -c '
+    tmp_home="$(mktemp -d)"
+    HOME="$tmp_home" SHELL=/bin/zsh node "$1/scripts/postinstall.js"
+    test -f "$tmp_home/.spawn/spawn.sh"
+    test -f "$tmp_home/.spawn/VERSION"
+    test -d "$tmp_home/.spawn/lib"
+    grep -qF ".spawn/spawn.sh" "$tmp_home/.zshrc"
+  ' -- "$PROJECT_DIR"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"installed. Restart your shell"* ]]
 }
 
 @test "_spawn_registered_repos persists cleanup even when captured" {
