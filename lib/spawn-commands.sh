@@ -684,18 +684,19 @@ _spawn_status() {
           fi
         fi
 
+        local display_agent="${agent:--}"
         local display_state
         if [[ "$state" == "active" ]]; then
-          display_state="● $agent"
+          display_state="● running"
         else
-          display_state="○ –"
+          display_state="○ idle"
         fi
 
         local rel_path="${wt_dir#$repo_parent/}"
 
         (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
         (( ${#rel_path} > max_w )) && max_w=${#rel_path}
-        rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${display_state}"$'\t'"${last_activity:--}"$'\n'
+        rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${display_agent}"$'\t'"${display_state}"$'\t'"${last_activity:--}"$'\n'
         ;;
     esac
   done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
@@ -705,12 +706,12 @@ _spawn_status() {
     return 0
   fi
 
-  _spawn_bold "$(printf '%-*s  %-*s  %-12s  %s' "$max_b" "BRANCH" "$max_w" "WORKTREE" "STATE" "LAST ACTIVITY")"
+  _spawn_bold "$(printf '%-*s  %-*s  %-8s  %-12s  %s' "$max_b" "BRANCH" "$max_w" "WORKTREE" "AGENT" "STATE" "LAST ACTIVITY")"
   echo ""
-  local _b _w _s _a
-  while IFS=$'\t' read -r _b _w _s _a; do
+  local _b _w _ag _s _a
+  while IFS=$'\t' read -r _b _w _ag _s _a; do
     [[ -n "$_b" ]] || continue
-    printf '%-*s  %-*s  %-12s  %s\n' "$max_b" "$_b" "$max_w" "$_w" "$_s" "$_a"
+    printf '%-*s  %-*s  %-8s  %-12s  %s\n' "$max_b" "$_b" "$max_w" "$_w" "$_ag" "$_s" "$_a"
   done <<< "$rows"
 }
 
