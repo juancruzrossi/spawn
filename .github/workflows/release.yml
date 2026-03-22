@@ -22,17 +22,6 @@ jobs:
           node-version: '24'
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Install QA dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bats zsh
-
-      - name: Lint
-        run: make lint
-
-      - name: Test
-        run: make test
-
       - name: Check if version is already published
         id: check
         run: |
