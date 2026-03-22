@@ -115,7 +115,10 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
           compadd -- --help
         fi
         ;;
-      status|update|version)
+      status)
+        [[ "$cur" == -* ]] && compadd -- --all --help
+        ;;
+      update|version)
         [[ "$cur" == -* ]] && compadd -- --help
         ;;
     esac
@@ -198,7 +201,10 @@ elif [[ -n "${BASH_VERSION:-}" ]]; then
           COMPREPLY=( $(compgen -W "--help" -- "$cur") )
         fi
         ;;
-      status|update|version)
+      status)
+        COMPREPLY=( $(compgen -W "--all --help" -- "$cur") )
+        ;;
+      update|version)
         COMPREPLY=( $(compgen -W "--help" -- "$cur") )
         ;;
       *)

@@ -599,43 +599,96 @@ _spawn_config() {
   echo "Set $target layout to $preset"
 }
 
+_spawn_collect_agent_procs() {
+  local _seen="" _pid _cmd _cwd _agent
+  while IFS= read -r _line; do
+    [[ -n "$_line" ]] || continue
+    _line="${_line#"${_line%%[! ]*}"}"
+    _pid="${_line%% *}"
+    _cmd="${_line#* }"
+    case "$_cmd" in
+      *claude*) _agent="claude" ;;
+      *codex*)  _agent="codex" ;;
+      *)        continue ;;
+    esac
+    if [[ -d "/proc/$_pid" ]]; then
+      _cwd="$(readlink -f "/proc/$_pid/cwd" 2>/dev/null || true)"
+    elif command -v lsof >/dev/null 2>&1; then
+      _cwd="$(lsof -p "$_pid" 2>/dev/null | awk '$4=="cwd" {print $NF}')"
+    else
+      continue
+    fi
+    [[ -n "$_cwd" ]] || continue
+    case "$_seen" in *"$_cwd:"*) continue ;; esac
+    _seen+="$_cwd:"
+    printf '%s:%s\n' "$_cwd" "$_agent"
+  done < <(ps -eo pid=,command= 2>/dev/null | grep -E '[c]laude|[c]odex')
+}
+
+_spawn_elapsed_label() {
+  local elapsed=$(( $(date +%s) - $1 ))
+  if (( elapsed < 60 )); then printf 'just now'
+  elif (( elapsed < 3600 )); then printf '%sm ago' "$(( elapsed / 60 ))"
+  elif (( elapsed < 86400 )); then printf '%sh ago' "$(( elapsed / 3600 ))"
+  else printf '%sd ago' "$(( elapsed / 86400 ))"
+  fi
+}
+
+_spawn_match_agent() {
+  local wt_dir="$1" procs="$2" _proc_line _proc_cwd
+  while IFS= read -r _proc_line; do
+    [[ -n "$_proc_line" ]] || continue
+    _proc_cwd="${_proc_line%%:*}"
+    if [[ "$_proc_cwd" == "$wt_dir" || "$_proc_cwd" == "$wt_dir/"* ]]; then
+      printf '%s' "${_proc_line##*:}"
+      return 0
+    fi
+  done <<< "$procs"
+  return 1
+}
+
+_spawn_is_spawn_worktree() {
+  local wt_dir="$1"
+  [[ -d "$wt_dir" ]] || return 1
+  local repo_root
+  repo_root="$(git -C "$wt_dir" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  repo_root="${repo_root%/.git}"
+  [[ -d "$repo_root" ]] || return 1
+  local layout filter
+  layout="$(_spawn_get_layout "$repo_root")"
+  filter="$(_spawn_worktree_filter "$repo_root" "$layout")"
+  [[ "$wt_dir" == "$filter"* ]]
+}
+
 _spawn_status() {
   if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     _spawn_print_status_usage
     return 0
   fi
 
+  local show_all=false
+  [[ "${1:-}" == "--all" ]] && show_all=true
+
+  local agent_procs
+  agent_procs="$(_spawn_collect_agent_procs)"
+
+  if [[ "$show_all" == true ]]; then
+    _spawn_status_all "$agent_procs"
+  else
+    _spawn_status_repo "$agent_procs"
+  fi
+}
+
+_spawn_status_repo() {
+  local agent_procs="$1"
   local repo_root
-  repo_root="$(_spawn_repo_root)" || { _spawn_error "not in a git repo"; return 1; }
+  repo_root="$(_spawn_repo_root)" || { _spawn_error "not in a git repo (use --all for global view)"; return 1; }
 
-  local layout
+  local layout filter
   layout="$(_spawn_get_layout "$repo_root")"
-  local filter
   filter="$(_spawn_worktree_filter "$repo_root" "$layout")"
-
-  local _agent_procs=""
-  local _pid _cwd _cmd _agent
-  while IFS= read -r _line; do
-    [[ -n "$_line" ]] || continue
-    _line="${_line#"${_line%%[! ]*}"}"
-    _pid="${_line%% *}"
-    _cmd="${_line#* }"
-    _agent=""
-    case "$_cmd" in
-      *claude*) _agent="claude" ;;
-      *codex*)  _agent="codex" ;;
-      *)        continue ;;
-    esac
-    _cwd=""
-    if [[ -d "/proc/$_pid" ]]; then
-      _cwd="$(readlink -f "/proc/$_pid/cwd" 2>/dev/null || true)"
-    elif command -v lsof >/dev/null 2>&1; then
-      _cwd="$(lsof -p "$_pid" 2>/dev/null | awk '$4=="cwd" {print $NF}')"
-    fi
-    [[ -n "$_cwd" ]] && _agent_procs+="${_cwd}:${_agent}"$'\n'
-  done < <(ps -eo pid=,command= 2>/dev/null | grep -E '[c]laude|[c]odex')
-
   local repo_parent="${repo_root%/*}"
+
   local rows="" max_b=6 max_w=8
   local wt_dir="" wt_branch=""
 
@@ -650,27 +703,13 @@ _spawn_status() {
         [[ "$wt_dir" == "$filter"* ]] || continue
         [[ -d "$wt_dir" ]] || continue
 
-        local agent="" _proc_line
-        while IFS= read -r _proc_line; do
-          [[ -n "$_proc_line" ]] || continue
-          local _proc_cwd="${_proc_line%%:*}"
-          if [[ "$_proc_cwd" == "$wt_dir" || "$_proc_cwd" == "$wt_dir/"* ]]; then
-            agent="${_proc_line##*:}"
-            break
-          fi
-        done <<< "$_agent_procs"
+        local agent=""
+        agent="$(_spawn_match_agent "$wt_dir" "$agent_procs")" || true
 
         local last_activity="-"
         local commit_ts
         commit_ts="$(git -C "$wt_dir" log -1 --format='%ct' 2>/dev/null || true)"
-        if [[ -n "$commit_ts" ]]; then
-          local elapsed=$(( $(date +%s) - commit_ts ))
-          if (( elapsed < 60 )); then last_activity="just now"
-          elif (( elapsed < 3600 )); then last_activity="$(( elapsed / 60 ))m ago"
-          elif (( elapsed < 86400 )); then last_activity="$(( elapsed / 3600 ))h ago"
-          else last_activity="$(( elapsed / 86400 ))d ago"
-          fi
-        fi
+        [[ -n "$commit_ts" ]] && last_activity="$(_spawn_elapsed_label "$commit_ts")"
 
         local rel_path="${wt_dir#$repo_parent/}"
         (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
@@ -684,6 +723,52 @@ _spawn_status() {
 
   if [[ -z "$rows" ]]; then
     echo "No spawn worktrees found."
+    return 0
+  fi
+
+  _spawn_bold "$(printf '%-*s  %-*s  %-8s  %-12s  %s' "$max_b" "BRANCH" "$max_w" "WORKTREE" "AGENT" "STATE" "LAST ACTIVITY")"
+  echo ""
+  local _b _w _ag _s _a
+  while IFS=$'\t' read -r _b _w _ag _s _a; do
+    [[ -n "$_b" ]] || continue
+    printf '%-*s  %-*s  %-8s  %-12s  %s\n' "$max_b" "$_b" "$max_w" "$_w" "$_ag" "$_s" "$_a"
+  done <<< "$rows"
+}
+
+_spawn_status_all() {
+  local agent_procs="$1"
+  [[ -z "$agent_procs" ]] && { echo "No active spawn sessions found."; return 0; }
+
+  local rows="" max_b=6 max_w=8
+  local _proc_line _proc_cwd _proc_agent
+
+  while IFS= read -r _proc_line; do
+    [[ -n "$_proc_line" ]] || continue
+    _proc_cwd="${_proc_line%%:*}"
+    _proc_agent="${_proc_line##*:}"
+
+    _spawn_is_spawn_worktree "$_proc_cwd" || continue
+
+    local wt_branch=""
+    wt_branch="$(git -C "$_proc_cwd" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    [[ -n "$wt_branch" ]] || continue
+
+    local last_activity="-"
+    local commit_ts=""
+    commit_ts="$(git -C "$_proc_cwd" log -1 --format='%ct' 2>/dev/null || true)"
+    [[ -n "$commit_ts" ]] && last_activity="$(_spawn_elapsed_label "$commit_ts")"
+
+    local home_prefix="$HOME/"
+    local rel_path="$_proc_cwd"
+    [[ "$rel_path" == "$home_prefix"* ]] && rel_path="~/${rel_path#$home_prefix}"
+
+    (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
+    (( ${#rel_path} > max_w )) && max_w=${#rel_path}
+    rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${_proc_agent}"$'\t'"● running"$'\t'"${last_activity}"$'\n'
+  done <<< "$agent_procs"
+
+  if [[ -z "$rows" ]]; then
+    echo "No active spawn sessions found."
     return 0
   fi
 

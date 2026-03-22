@@ -123,11 +123,14 @@ EOF
 _spawn_print_status_usage() {
   cat <<'EOF'
 Usage:
-  spawn status
+  spawn status [--all]
 
 Description:
   Shows the state of each spawn-managed worktree: branch, path,
   whether an agent is running, and last activity.
+
+Options:
+  --all   Show active spawn sessions across all repositories
 EOF
 }
 
