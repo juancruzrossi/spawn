@@ -711,11 +711,11 @@ _spawn_status_repo() {
         commit_ts="$(git -C "$wt_dir" log -1 --format='%ct' 2>/dev/null || true)"
         [[ -n "$commit_ts" ]] && last_activity="$(_spawn_elapsed_label "$commit_ts")"
 
-        local rel_path="${wt_dir#$repo_parent/}"
+        local rel_path="${wt_dir##*/}"
         (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
         (( ${#rel_path} > max_w )) && max_w=${#rel_path}
         local display_state="○ idle"
-        [[ -n "$agent" ]] && display_state="● running"
+        [[ -n "$agent" ]] && display_state="● active"
         rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${agent:--}"$'\t'"${display_state}"$'\t'"${last_activity}"$'\n'
         ;;
     esac
@@ -758,13 +758,11 @@ _spawn_status_all() {
     commit_ts="$(git -C "$_proc_cwd" log -1 --format='%ct' 2>/dev/null || true)"
     [[ -n "$commit_ts" ]] && last_activity="$(_spawn_elapsed_label "$commit_ts")"
 
-    local home_prefix="$HOME/"
-    local rel_path="$_proc_cwd"
-    [[ "$rel_path" == "$home_prefix"* ]] && rel_path="~/${rel_path#$home_prefix}"
+    local rel_path="${_proc_cwd##*/}"
 
     (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
     (( ${#rel_path} > max_w )) && max_w=${#rel_path}
-    rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${_proc_agent}"$'\t'"● running"$'\t'"${last_activity}"$'\n'
+    rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${_proc_agent}"$'\t'"● active"$'\t'"${last_activity}"$'\n'
   done <<< "$agent_procs"
 
   if [[ -z "$rows" ]]; then
