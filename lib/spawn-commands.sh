@@ -650,54 +650,34 @@ _spawn_status() {
         [[ "$wt_dir" == "$filter"* ]] || continue
         [[ -d "$wt_dir" ]] || continue
 
-        local state="idle" agent="" _proc_line
+        local agent="" _proc_line
         while IFS= read -r _proc_line; do
           [[ -n "$_proc_line" ]] || continue
           local _proc_cwd="${_proc_line%%:*}"
-          local _proc_agent="${_proc_line##*:}"
           if [[ "$_proc_cwd" == "$wt_dir" || "$_proc_cwd" == "$wt_dir/"* ]]; then
-            state="active"
-            agent="$_proc_agent"
+            agent="${_proc_line##*:}"
             break
           fi
         done <<< "$_agent_procs"
 
-        local last_ts=""
+        local last_activity="-"
         local commit_ts
         commit_ts="$(git -C "$wt_dir" log -1 --format='%ct' 2>/dev/null || true)"
         if [[ -n "$commit_ts" ]]; then
-          last_ts="$commit_ts"
-        fi
-
-        local last_activity=""
-        if [[ -n "$last_ts" ]]; then
-          local now
-          now="$(date +%s)"
-          local elapsed=$(( now - last_ts ))
-          if (( elapsed < 60 )); then
-            last_activity="just now"
-          elif (( elapsed < 3600 )); then
-            last_activity="$(( elapsed / 60 ))m ago"
-          elif (( elapsed < 86400 )); then
-            last_activity="$(( elapsed / 3600 ))h ago"
-          else
-            last_activity="$(( elapsed / 86400 ))d ago"
+          local elapsed=$(( $(date +%s) - commit_ts ))
+          if (( elapsed < 60 )); then last_activity="just now"
+          elif (( elapsed < 3600 )); then last_activity="$(( elapsed / 60 ))m ago"
+          elif (( elapsed < 86400 )); then last_activity="$(( elapsed / 3600 ))h ago"
+          else last_activity="$(( elapsed / 86400 ))d ago"
           fi
         fi
 
-        local display_agent="${agent:--}"
-        local display_state
-        if [[ "$state" == "active" ]]; then
-          display_state="● running"
-        else
-          display_state="○ idle"
-        fi
-
         local rel_path="${wt_dir#$repo_parent/}"
-
         (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
         (( ${#rel_path} > max_w )) && max_w=${#rel_path}
-        rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${display_agent}"$'\t'"${display_state}"$'\t'"${last_activity:--}"$'\n'
+        local display_state="○ idle"
+        [[ -n "$agent" ]] && display_state="● running"
+        rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${agent:--}"$'\t'"${display_state}"$'\t'"${last_activity}"$'\n'
         ;;
     esac
   done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
