@@ -43,6 +43,7 @@ USAGE
 COMMANDS
   new       Create a worktree + branch, then open the agent
   start     Resume an existing worktree session
+  status    Show worktree states and active agent sessions
   ls        List spawn-managed worktrees
   cd        Jump to a worktree directory (no args → repo root)
   config    Show or update spawn configuration
@@ -116,6 +117,17 @@ Environment:
 Examples:
   spawn start feature/rest-performance
   spawn start feature/rest-performance -a codex
+EOF
+}
+
+_spawn_print_status_usage() {
+  cat <<'EOF'
+Usage:
+  spawn status
+
+Description:
+  Shows the state of each spawn-managed worktree: branch, path,
+  whether an agent is running, and last activity.
 EOF
 }
 
@@ -242,6 +254,7 @@ spawn() {
   case "$cmd" in
     new)     _spawn_new "$@" ;;
     start)   _spawn_start "$@" ;;
+    status)  _spawn_status "$@" ;;
     cd)      _spawn_cd "$@" ;;
     ls)      _spawn_ls "$@" ;;
     merge)   _spawn_merge "$@" ;;

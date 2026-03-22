@@ -71,6 +71,7 @@ spawn start feature/db-indexes -b
 | `spawn new <branch>` | Creates a branch and worktree, then opens the agent. |
 | `spawn start <branch>` | Reopens an existing worktree and resumes the session. |
 | `spawn cd [branch]` | Jumps to a worktree. No args goes to repo root. |
+| `spawn status` | Shows worktree states and active agent sessions. |
 | `spawn ls` | Lists spawn-managed branches. |
 | `spawn merge [branch]` | Merges a worktree branch into the primary checkout. |
 | `spawn rm [branch]` | Removes a worktree and its branch. |

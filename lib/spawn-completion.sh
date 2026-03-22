@@ -27,6 +27,7 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
     local -a subcmds=(
       'new:Create a worktree and open an agent'
       'start:Reopen an existing worktree'
+      'status:Show worktree states and active agents'
       'ls:List spawn-managed worktrees'
       'cd:Jump to a worktree or the repo root'
       'config:Show or change configuration'
@@ -114,7 +115,7 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
           compadd -- --help
         fi
         ;;
-      update|version)
+      status|update|version)
         [[ "$cur" == -* ]] && compadd -- --help
         ;;
     esac
@@ -131,7 +132,7 @@ elif [[ -n "${BASH_VERSION:-}" ]]; then
     subcmd="${COMP_WORDS[1]}"
 
     if (( COMP_CWORD == 1 )); then
-      COMPREPLY=( $(compgen -W "new start ls cd config merge rm init update version" -- "$cur") )
+      COMPREPLY=( $(compgen -W "new start status ls cd config merge rm init update version" -- "$cur") )
       return
     fi
 
@@ -197,7 +198,7 @@ elif [[ -n "${BASH_VERSION:-}" ]]; then
           COMPREPLY=( $(compgen -W "--help" -- "$cur") )
         fi
         ;;
-      update|version)
+      status|update|version)
         COMPREPLY=( $(compgen -W "--help" -- "$cur") )
         ;;
       *)
