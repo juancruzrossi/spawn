@@ -4,10 +4,6 @@ _spawn_offer_gitignore() {
   local worktree_gitignore="$worktree_dir/.gitignore"
   [[ -f "$worktree_gitignore" ]] && grep -qF '.worktrees' "$worktree_gitignore" 2>/dev/null && return 0
 
-  local common_dir
-  common_dir="$(_spawn_repo_common_dir "$repo_root" 2>/dev/null)" || return 0
-  local exclude_file="$common_dir/info/exclude"
-
   local state_dir
   state_dir="$(_spawn_repo_state_dir "$repo_root" 2>/dev/null)" || return 0
   [[ -f "$state_dir/.gitignore_offered" || -f "$state_dir/.worktrees_ignore_offered" ]] && return 0
@@ -19,13 +15,7 @@ _spawn_offer_gitignore() {
   mkdir -p "$state_dir"
   touch "$state_dir/.worktrees_ignore_offered"
   case "${answer:-Y}" in
-    [Yy]*)
-      printf '%s\n' '.worktrees/' >> "$worktree_gitignore"
-      mkdir -p "$common_dir/info"
-      if [[ ! -f "$exclude_file" ]] || ! grep -qF '.worktrees/' "$exclude_file" 2>/dev/null; then
-        printf '%s\n' '.worktrees/' >> "$exclude_file"
-      fi
-      ;;
+    [Yy]*) printf '%s\n' '.worktrees/' >> "$worktree_gitignore" ;;
   esac
 }
 
