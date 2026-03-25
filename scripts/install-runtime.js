@@ -15,9 +15,14 @@ const { homedir } = require('os')
 const { join, resolve } = require('path')
 
 function detectRcFile(homeDir, shell) {
-  return shell.includes('zsh')
-    ? join(homeDir, '.zshrc')
-    : join(homeDir, '.bashrc')
+  const candidates = shell.includes('zsh') ? ['.zshrc']
+    : shell.includes('bash') ? ['.bashrc', '.bash_profile']
+    : process.platform === 'darwin' ? ['.zshrc', '.bashrc', '.bash_profile']
+    : ['.bashrc', '.zshrc', '.bash_profile']
+
+  return candidates
+    .map(f => join(homeDir, f))
+    .find(p => existsSync(p)) || join(homeDir, candidates[0])
 }
 
 function loadPackageVersion(packageDir) {
@@ -68,6 +73,9 @@ function ensureSourceLine(rcFile, sourceLine, marker, ignoreErrors) {
     if (!ignoreErrors) {
       throw new Error(`failed to update shell rc file: ${err.message}`)
     }
+    console.warn(`spawn: could not update ${rcFile}: ${err.message}`)
+    console.warn(`spawn: add this line manually to your shell rc file:`)
+    console.warn(`  ${sourceLine}`)
   }
 }
 
