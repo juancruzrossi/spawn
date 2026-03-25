@@ -820,15 +820,20 @@ _spawn_update() {
   _spawn_dim "Current: v$SPAWN_VERSION"; echo ""
   echo "Checking for updates..."
 
-  local latest
-  latest="$(npm view @jxtools/spawn version 2>/dev/null || true)"
+  local latest registry
+  registry="$(_spawn_npm_registry 2>/dev/null || true)"
+  latest="$(_spawn_npm_view_latest_version || true)"
 
   if [[ -z "$latest" ]]; then
-    _spawn_error "could not check latest version"
+    if [[ -n "$registry" ]]; then
+      _spawn_error "could not check latest version (registry: $registry)"
+    else
+      _spawn_error "could not check latest version"
+    fi
     return 1
   fi
 
-  if [[ "$latest" == "$SPAWN_VERSION" ]]; then
+  if ! _spawn_version_is_newer "$latest" "$SPAWN_VERSION"; then
     _spawn_green "✓"; echo " Already on the latest version (v$SPAWN_VERSION)"
     return 0
   fi
@@ -836,7 +841,7 @@ _spawn_update() {
   echo "New version available: v$latest"
   echo "Updating..."
 
-  if npm install -g @jxtools/spawn@latest >/dev/null 2>&1; then
+  if _spawn_npm_install_latest; then
     local global_package_dir
     global_package_dir="$(_spawn_global_package_dir)" || {
       _spawn_error "update failed: could not resolve the global package directory"
@@ -852,7 +857,11 @@ _spawn_update() {
     fi
     _spawn_green "✓"; echo " Updated to v$SPAWN_VERSION"
   else
-    _spawn_error "update failed"
+    if [[ -n "$registry" ]]; then
+      _spawn_error "update failed (registry: $registry)"
+    else
+      _spawn_error "update failed"
+    fi
     return 1
   fi
 }

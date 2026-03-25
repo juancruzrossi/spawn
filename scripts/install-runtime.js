@@ -13,6 +13,7 @@ const {
 } = require('fs')
 const { homedir } = require('os')
 const { join, resolve } = require('path')
+const { execFileSync } = require('child_process')
 
 function detectRcFiles(homeDir, shell) {
   const existing = ['.bashrc', '.bash_profile', '.zshrc']
@@ -90,6 +91,29 @@ function ensureSourceLine(rcFile, sourceLine, marker, ignoreErrors) {
   }
 }
 
+function resolveRegistry(env) {
+  const envRegistry = env.npm_config_registry || env.NPM_CONFIG_REGISTRY || ''
+  if (envRegistry.trim() !== '') {
+    return envRegistry.trim()
+  }
+
+  try {
+    const registry = execFileSync('npm', ['config', 'get', 'registry'], {
+      env,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
+
+    if (registry !== '' && registry !== 'undefined' && registry !== 'null') {
+      return registry
+    }
+  } catch (_err) {
+    // Best effort only.
+  }
+
+  return ''
+}
+
 function installRuntime(options = {}) {
   const packageDir = resolve(options.packageDir || join(__dirname, '..'))
   const homeDir = options.homeDir || homedir()
@@ -103,6 +127,11 @@ function installRuntime(options = {}) {
 
   const version = loadPackageVersion(packageDir)
   copyRuntimeFiles(packageDir, installDir, version)
+
+  const registry = resolveRegistry(process.env)
+  if (registry !== '') {
+    writeFileSync(join(installDir, 'registry'), registry + '\n')
+  }
 
   const rcFiles = detectRcFiles(homeDir, shell)
   rcFiles.forEach(file => ensureSourceLine(file, sourceLine, marker, ignoreRcErrors))

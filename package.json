@@ -1,6 +1,6 @@
 {
   "name": "@jxtools/spawn",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "description": "CLI tool for running multiple AI coding agents in parallel using git worktrees",
   "bin": {
     "spawn": "spawn.sh"
