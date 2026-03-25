@@ -1,19 +1,22 @@
 SPAWN_HOME="$HOME/.spawn"
 
+_spawn_package_version_from_dir() {
+  local package_dir="$1"
+  local package_file="$package_dir/package.json"
+  [[ -f "$package_file" ]] || return 1
+
+  local package_version
+  package_version="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$package_file")"
+  [[ -n "$package_version" ]] || return 1
+
+  printf '%s\n' "$package_version"
+}
+
 _spawn_runtime_version() {
   if [[ -n "${_SPAWN_ENTRY_FILE:-}" ]]; then
     local runtime_dir
     runtime_dir="$(CDPATH= cd -- "$(dirname -- "$_SPAWN_ENTRY_FILE")" && pwd -P 2>/dev/null)" || runtime_dir=""
-
-    local package_file="$runtime_dir/package.json"
-    if [[ -f "$package_file" ]]; then
-      local package_version
-      package_version="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$package_file")"
-      [[ -n "$package_version" ]] && {
-        printf '%s\n' "$package_version"
-        return 0
-      }
-    fi
+    _spawn_package_version_from_dir "$runtime_dir" && return 0
   fi
 
   [[ -f "$SPAWN_HOME/VERSION" ]] && {
@@ -25,6 +28,12 @@ _spawn_runtime_version() {
 }
 
 SPAWN_VERSION="$(_spawn_runtime_version)"
+
+_spawn_global_package_dir() {
+  local npm_root
+  npm_root="$(npm root -g 2>/dev/null)" || return 1
+  printf '%s\n' "$npm_root/@jxtools/spawn"
+}
 
 _spawn_has_color() { [[ -t 1 && "${NO_COLOR:-}" == "" ]]; }
 _spawn_bold()  { _spawn_has_color && printf '\033[1m%s\033[0m' "$*" || printf '%s' "$*"; }
@@ -250,6 +259,36 @@ Description:
 EOF
 }
 
+_spawn_shell_init() {
+  local shell_name="${1:-}"
+  if [[ -z "$shell_name" ]]; then
+    shell_name="${SHELL##*/}"
+  fi
+
+  case "$shell_name" in
+    bash|zsh) ;;
+    *)
+      _spawn_error "invalid shell: ${shell_name:-unknown}"
+      echo "Valid shells: bash, zsh" >&2
+      return 1
+      ;;
+  esac
+
+  local runtime="${_SPAWN_ENTRY_FILE:-}"
+  if [[ -z "$runtime" || ! -f "$runtime" ]]; then
+    _spawn_error "could not locate the spawn runtime"
+    return 1
+  fi
+
+  local runtime_escaped="$runtime"
+  runtime_escaped="${runtime_escaped//\\/\\\\}"
+  runtime_escaped="${runtime_escaped//\"/\\\"}"
+  runtime_escaped="${runtime_escaped//\$/\\$}"
+  runtime_escaped="${runtime_escaped//\`/\\\`}"
+
+  printf 'source "%s"\n' "$runtime_escaped"
+}
+
 spawn() {
   local cmd="${1:-}"
   shift 2>/dev/null
@@ -260,6 +299,7 @@ spawn() {
     status)  _spawn_status "$@" ;;
     cd)      _spawn_cd "$@" ;;
     ls)      _spawn_ls "$@" ;;
+    __shell-init) _spawn_shell_init "$@" ;;
     merge)   _spawn_merge "$@" ;;
     rm)      _spawn_rm "$@" ;;
     init)    _spawn_init "$@" ;;

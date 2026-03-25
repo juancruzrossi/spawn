@@ -12,12 +12,6 @@ Supported agents:
 npm install -g @jxtools/spawn
 ```
 
-Then reload your shell:
-
-```bash
-source ~/.zshrc   # or source ~/.bashrc
-```
-
 ### Requirements
 
 - **Node.js 18+**
@@ -98,15 +92,3 @@ spawn start feature/db-indexes -b
 | --- | --- |
 | `SPAWN_AGENT=codex` | Changes the default agent. |
 | `SPAWN_BYPASS=1` | Enables bypass mode by default. |
-
-## Troubleshooting
-
-If `spawn` is not found after installing, add the source line manually:
-
-```bash
-# zsh (macOS default)
-echo 'source "$HOME/.spawn/spawn.sh"' >> ~/.zshrc && source ~/.zshrc
-
-# bash
-echo 'source "$HOME/.spawn/spawn.sh"' >> ~/.bashrc && source ~/.bashrc
-```

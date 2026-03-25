@@ -1,21 +1,39 @@
 _spawn_offer_gitignore() {
-  local repo_root="$1" layout="$2"
+  local repo_root="$1" worktree_dir="$2" layout="$3"
   [[ "$layout" == "nested" ]] || return 0
-  local gitignore="$repo_root/.gitignore"
-  [[ -f "$gitignore" ]] && grep -qF '.worktrees' "$gitignore" 2>/dev/null && return 0
+  local worktree_gitignore="$worktree_dir/.gitignore"
+  [[ -f "$worktree_gitignore" ]] && grep -qF '.worktrees' "$worktree_gitignore" 2>/dev/null && return 0
 
-  local state_dir
+  local state_dir answer_file saved_answer
   state_dir="$(_spawn_repo_state_dir "$repo_root" 2>/dev/null)" || return 0
-  [[ -f "$state_dir/.gitignore_offered" ]] && return 0
+  answer_file="$state_dir/worktrees-gitignore-answer"
+  saved_answer=""
+  [[ -f "$answer_file" ]] && saved_answer="$(<"$answer_file")"
+
+  case "$saved_answer" in
+    yes)
+      printf '%s\n' '.worktrees/' >> "$worktree_gitignore"
+      return 0
+      ;;
+    no)
+      return 0
+      ;;
+  esac
+
   [[ -t 0 ]] || return 0
 
   local answer=""
-  printf 'Add .worktrees/ to .gitignore? [Y/n] '
+  printf 'Add .worktrees/ to .gitignore in this branch? [Y/n] '
   read -r answer
   mkdir -p "$state_dir"
-  touch "$state_dir/.gitignore_offered"
   case "${answer:-Y}" in
-    [Yy]*) printf '%s\n' '.worktrees/' >> "$gitignore" ;;
+    [Yy]*)
+      printf '%s\n' yes > "$answer_file"
+      printf '%s\n' '.worktrees/' >> "$worktree_gitignore"
+      ;;
+    *)
+      printf '%s\n' no > "$answer_file"
+      ;;
   esac
 }
 
@@ -73,7 +91,7 @@ _spawn_new() {
   fi
 
   _spawn_register_repo "$repo_root"
-  _spawn_offer_gitignore "$repo_root" "$layout"
+  _spawn_offer_gitignore "$repo_root" "$worktree_dir" "$layout"
   _spawn_green "✓"; echo " Created worktree: $branch"
   _spawn_dim "  Launching $agent..."; echo ""
   _spawn_schedule_update_check
@@ -821,11 +839,15 @@ _spawn_update() {
 
   if npm install -g @jxtools/spawn@latest >/dev/null 2>&1; then
     _spawn_spinner_stop
-    if [[ ! -f "$SPAWN_HOME/spawn.sh" || ! -d "$SPAWN_HOME/lib" || ! -f "$SPAWN_HOME/VERSION" ]]; then
-      _spawn_error "update failed: installed runtime is incomplete"
+    local global_package_dir
+    global_package_dir="$(_spawn_global_package_dir)" || {
+      _spawn_error "update failed: could not resolve the global package directory"
       return 1
-    fi
-    SPAWN_VERSION="$(<"$SPAWN_HOME/VERSION")"
+    }
+    SPAWN_VERSION="$(_spawn_package_version_from_dir "$global_package_dir")" || {
+      _spawn_error "update failed: installed package is incomplete"
+      return 1
+    }
     if [[ "$SPAWN_VERSION" != "$latest" ]]; then
       _spawn_error "update failed: expected v$latest, found v$SPAWN_VERSION"
       return 1
