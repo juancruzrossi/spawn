@@ -59,7 +59,7 @@ unset _spawn_runtime_file _SPAWN_RUNTIME_DIR
 if [[ "$_spawn_is_sourced" -eq 0 ]]; then
   if [[ "${1:-}" == "cd" ]]; then
     _spawn_error "'spawn cd' requires shell integration"
-    echo "Run 'eval \"\$(spawn shell-init bash)\"' or 'eval \"\$(spawn shell-init zsh)\"' first." >&2
+    echo "Run 'eval \"\$(spawn __shell-init bash)\"' or 'eval \"\$(spawn __shell-init zsh)\"' first." >&2
     exit 1
   fi
 

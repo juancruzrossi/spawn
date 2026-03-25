@@ -35,23 +35,6 @@ _spawn_global_package_dir() {
   printf '%s\n' "$npm_root/@jxtools/spawn"
 }
 
-_spawn_version_key() {
-  local version="${1%%-*}"
-  local major=0 minor=0 patch=0 extra=0
-  IFS=. read -r major minor patch extra <<< "$version"
-  printf '%08d%08d%08d%08d\n' \
-    "${major:-0}" \
-    "${minor:-0}" \
-    "${patch:-0}" \
-    "${extra:-0}"
-}
-
-_spawn_version_is_newer() {
-  local candidate="$1"
-  local current="$2"
-  [[ "$(_spawn_version_key "$candidate")" > "$(_spawn_version_key "$current")" ]]
-}
-
 _spawn_has_color() { [[ -t 1 && "${NO_COLOR:-}" == "" ]]; }
 _spawn_bold()  { _spawn_has_color && printf '\033[1m%s\033[0m' "$*" || printf '%s' "$*"; }
 _spawn_dim()   { _spawn_has_color && printf '\033[2m%s\033[0m' "$*" || printf '%s' "$*"; }
@@ -72,7 +55,6 @@ COMMANDS
   status    Show worktree states and active agent sessions
   ls        List spawn-managed worktrees
   cd        Jump to a worktree directory (no args → repo root)
-  shell-init Print shell integration for cd + completions
   config    Show or update spawn configuration
   merge     Merge a worktree branch into the primary checkout
   rm        Remove a worktree and its branch
@@ -83,7 +65,6 @@ COMMANDS
 EXAMPLES
   spawn new feature/auth -p "Add OAuth2 login"
   spawn start feature/auth
-  eval "$(spawn shell-init bash)"
   spawn merge feature/auth --squash
   spawn rm feature/auth
 
@@ -247,21 +228,6 @@ Example:
 EOF
 }
 
-_spawn_print_shell_init_usage() {
-  cat <<'EOF'
-Usage:
-  spawn shell-init <bash|zsh>
-
-Description:
-  Prints the shell snippet that enables `spawn cd` and completions
-  in the current shell session.
-
-Examples:
-  eval "$(spawn shell-init bash)"
-  eval "$(spawn shell-init zsh)"
-EOF
-}
-
 _spawn_print_config_usage() {
   cat <<'EOF'
 Usage:
@@ -294,11 +260,6 @@ EOF
 }
 
 _spawn_shell_init() {
-  if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-    _spawn_print_shell_init_usage
-    return 0
-  fi
-
   local shell_name="${1:-}"
   if [[ -z "$shell_name" ]]; then
     shell_name="${SHELL##*/}"
@@ -338,7 +299,7 @@ spawn() {
     status)  _spawn_status "$@" ;;
     cd)      _spawn_cd "$@" ;;
     ls)      _spawn_ls "$@" ;;
-    shell-init) _spawn_shell_init "$@" ;;
+    __shell-init) _spawn_shell_init "$@" ;;
     merge)   _spawn_merge "$@" ;;
     rm)      _spawn_rm "$@" ;;
     init)    _spawn_init "$@" ;;
@@ -611,8 +572,7 @@ _spawn_check_update_available() {
   local latest
   latest="$(npm view @jxtools/spawn version 2>/dev/null)" || return 1
   printf '%s\n' "$now" > "$_SPAWN_UPDATE_CHECK_FILE" 2>/dev/null || true
-  [[ -n "$latest" ]] || return 1
-  _spawn_version_is_newer "$latest" "$SPAWN_VERSION" || return 1
+  [[ -n "$latest" && "$latest" != "$SPAWN_VERSION" ]] || return 1
 
   echo ""
   _spawn_dim "A new version of spawn is available: "

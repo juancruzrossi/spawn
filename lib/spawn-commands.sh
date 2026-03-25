@@ -4,16 +4,11 @@ _spawn_offer_gitignore() {
   local worktree_gitignore="$worktree_dir/.gitignore"
   [[ -f "$worktree_gitignore" ]] && grep -qF '.worktrees' "$worktree_gitignore" 2>/dev/null && return 0
 
-  local state_dir
-  state_dir="$(_spawn_repo_state_dir "$repo_root" 2>/dev/null)" || return 0
-  [[ -f "$state_dir/.gitignore_offered" || -f "$state_dir/.worktrees_ignore_offered" ]] && return 0
   [[ -t 0 ]] || return 0
 
   local answer=""
   printf 'Add .worktrees/ to .gitignore in this branch? [Y/n] '
   read -r answer
-  mkdir -p "$state_dir"
-  touch "$state_dir/.worktrees_ignore_offered"
   case "${answer:-Y}" in
     [Yy]*) printf '%s\n' '.worktrees/' >> "$worktree_gitignore" ;;
   esac
@@ -811,7 +806,7 @@ _spawn_update() {
     return 1
   fi
 
-  if ! _spawn_version_is_newer "$latest" "$SPAWN_VERSION"; then
+  if [[ "$latest" == "$SPAWN_VERSION" ]]; then
     _spawn_green "✓"; echo " Already on the latest version (v$SPAWN_VERSION)"
     return 0
   fi

@@ -27,7 +27,6 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
       'status:Show worktree states and active agents'
       'ls:List spawn-managed worktrees'
       'cd:Jump to a worktree or the repo root'
-      'shell-init:Print shell integration for cd and completions'
       'config:Show or change configuration'
       'merge:Merge a worktree branch'
       'rm:Remove one or more worktrees'
@@ -75,9 +74,6 @@ if [[ -n "${ZSH_VERSION:-}" ]]; then
           local -a worktrees=( ${(f)"$(_spawn_worktree_names)"} )
           compadd -- "${worktrees[@]}"
         fi
-        ;;
-      shell-init)
-        compadd -- bash zsh --help
         ;;
       ls)
         [[ "$cur" == -* ]] && compadd -- --help
@@ -136,7 +132,7 @@ elif [[ -n "${BASH_VERSION:-}" ]]; then
     subcmd="${COMP_WORDS[1]}"
 
     if (( COMP_CWORD == 1 )); then
-      COMPREPLY=( $(compgen -W "new start status ls cd shell-init config merge rm init update version" -- "$cur") )
+      COMPREPLY=( $(compgen -W "new start status ls cd config merge rm init update version" -- "$cur") )
       return
     fi
 
@@ -168,9 +164,6 @@ elif [[ -n "${BASH_VERSION:-}" ]]; then
         else
           COMPREPLY=( $(compgen -W "$(_spawn_worktree_names)" -- "$cur") )
         fi
-        ;;
-      shell-init)
-        COMPREPLY=( $(compgen -W "bash zsh --help" -- "$cur") )
         ;;
       ls)
         COMPREPLY=( $(compgen -W "--help" -- "$cur") )
