@@ -4,18 +4,26 @@ _spawn_offer_gitignore() {
   local gitignore="$repo_root/.gitignore"
   [[ -f "$gitignore" ]] && grep -qF '.worktrees' "$gitignore" 2>/dev/null && return 0
 
+  local common_dir
+  common_dir="$(_spawn_repo_common_dir "$repo_root" 2>/dev/null)" || return 0
+  local exclude_file="$common_dir/info/exclude"
+  [[ -f "$exclude_file" ]] && grep -qF '.worktrees/' "$exclude_file" 2>/dev/null && return 0
+
   local state_dir
   state_dir="$(_spawn_repo_state_dir "$repo_root" 2>/dev/null)" || return 0
-  [[ -f "$state_dir/.gitignore_offered" ]] && return 0
+  [[ -f "$state_dir/.gitignore_offered" || -f "$state_dir/.worktrees_ignore_offered" ]] && return 0
   [[ -t 0 ]] || return 0
 
   local answer=""
-  printf 'Add .worktrees/ to .gitignore? [Y/n] '
+  printf 'Add .worktrees/ to local git exclude? [Y/n] '
   read -r answer
   mkdir -p "$state_dir"
-  touch "$state_dir/.gitignore_offered"
+  touch "$state_dir/.worktrees_ignore_offered"
   case "${answer:-Y}" in
-    [Yy]*) printf '%s\n' '.worktrees/' >> "$gitignore" ;;
+    [Yy]*)
+      mkdir -p "$common_dir/info"
+      printf '%s\n' '.worktrees/' >> "$exclude_file"
+      ;;
   esac
 }
 
@@ -811,7 +819,7 @@ _spawn_update() {
     return 1
   fi
 
-  if [[ "$latest" == "$SPAWN_VERSION" ]]; then
+  if ! _spawn_version_is_newer "$latest" "$SPAWN_VERSION"; then
     _spawn_green "✓"; echo " Already on the latest version (v$SPAWN_VERSION)"
     return 0
   fi
@@ -821,11 +829,15 @@ _spawn_update() {
 
   if npm install -g @jxtools/spawn@latest >/dev/null 2>&1; then
     _spawn_spinner_stop
-    if [[ ! -f "$SPAWN_HOME/spawn.sh" || ! -d "$SPAWN_HOME/lib" || ! -f "$SPAWN_HOME/VERSION" ]]; then
-      _spawn_error "update failed: installed runtime is incomplete"
+    local global_package_dir
+    global_package_dir="$(_spawn_global_package_dir)" || {
+      _spawn_error "update failed: could not resolve the global package directory"
       return 1
-    fi
-    SPAWN_VERSION="$(<"$SPAWN_HOME/VERSION")"
+    }
+    SPAWN_VERSION="$(_spawn_package_version_from_dir "$global_package_dir")" || {
+      _spawn_error "update failed: installed package is incomplete"
+      return 1
+    }
     if [[ "$SPAWN_VERSION" != "$latest" ]]; then
       _spawn_error "update failed: expected v$latest, found v$SPAWN_VERSION"
       return 1

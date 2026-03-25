@@ -1,13 +1,16 @@
-#!/bin/sh
-set -eu
+#!/usr/bin/env bash
+set -euo pipefail
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
-INSTALL_HELPER="$SCRIPT_DIR/scripts/install-runtime.js"
 
-if ! command -v node >/dev/null 2>&1; then
-  echo "Could not read version from package.json (is Node.js installed?)"
+if ! command -v npm >/dev/null 2>&1; then
+  echo "npm not found. Install Node.js 18+ first."
   exit 1
 fi
 
-VERSION=$(node "$INSTALL_HELPER" --package-dir "$SCRIPT_DIR" --strict-rc --print version)
+npm install -g "$SCRIPT_DIR"
+
+VERSION=$(node -p "require(process.argv[1]).version" "$SCRIPT_DIR/package.json")
 printf '✅ spawn installed successfully (v%s)\n' "$VERSION"
+echo 'Optional shell integration for `spawn cd` and completions:'
+echo '  eval "$(spawn shell-init bash)"'
