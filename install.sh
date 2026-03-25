@@ -12,5 +12,4 @@ npm install -g "$SCRIPT_DIR"
 
 VERSION=$(node -p "require(process.argv[1]).version" "$SCRIPT_DIR/package.json")
 printf '✅ spawn installed successfully (v%s)\n' "$VERSION"
-echo 'Optional shell integration for `spawn cd` and completions:'
-echo '  eval "$(spawn shell-init bash)"'
+echo 'Open a new shell to use `spawn cd` as well.'
