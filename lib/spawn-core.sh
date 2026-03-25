@@ -35,6 +35,83 @@ _spawn_global_package_dir() {
   printf '%s\n' "$npm_root/@jxtools/spawn"
 }
 
+_spawn_version_key() {
+  local version="${1%%-*}"
+  local major=0 minor=0 patch=0 extra=0
+  IFS=. read -r major minor patch extra <<< "$version"
+  printf '%08d%08d%08d%08d\n' \
+    "${major:-0}" \
+    "${minor:-0}" \
+    "${patch:-0}" \
+    "${extra:-0}"
+}
+
+_spawn_version_is_newer() {
+  local candidate="$1"
+  local current="$2"
+  [[ "$(_spawn_version_key "$candidate")" > "$(_spawn_version_key "$current")" ]]
+}
+
+_spawn_saved_registry_file() {
+  printf '%s\n' "$SPAWN_HOME/registry"
+}
+
+_spawn_saved_registry() {
+  local registry_file
+  registry_file="$(_spawn_saved_registry_file)"
+  [[ -f "$registry_file" ]] || return 1
+
+  local registry
+  registry="$(<"$registry_file")"
+  [[ -n "$registry" ]] || return 1
+  printf '%s\n' "$registry"
+}
+
+_spawn_npm_registry() {
+  if [[ -n "${npm_config_registry:-}" ]]; then
+    printf '%s\n' "$npm_config_registry"
+    return 0
+  fi
+
+  if [[ -n "${NPM_CONFIG_REGISTRY:-}" ]]; then
+    printf '%s\n' "$NPM_CONFIG_REGISTRY"
+    return 0
+  fi
+
+  _spawn_saved_registry && return 0
+
+  local registry
+  registry="$(npm config get registry 2>/dev/null || true)"
+  [[ -n "$registry" && "$registry" != "undefined" && "$registry" != "null" ]] || return 1
+  printf '%s\n' "$registry"
+}
+
+_spawn_npm_view_latest_version() {
+  local registry
+  registry="$(_spawn_npm_registry 2>/dev/null || true)"
+
+  if [[ -n "$registry" ]]; then
+    npm_config_fetch_retries=0 npm_config_fetch_timeout=5000 \
+      npm view @jxtools/spawn version --registry "$registry" 2>/dev/null
+  else
+    npm_config_fetch_retries=0 npm_config_fetch_timeout=5000 \
+      npm view @jxtools/spawn version 2>/dev/null
+  fi
+}
+
+_spawn_npm_install_latest() {
+  local registry
+  registry="$(_spawn_npm_registry 2>/dev/null || true)"
+
+  if [[ -n "$registry" ]]; then
+    npm_config_fetch_retries=0 npm_config_fetch_timeout=10000 \
+      npm install -g @jxtools/spawn@latest --registry "$registry" >/dev/null 2>&1
+  else
+    npm_config_fetch_retries=0 npm_config_fetch_timeout=10000 \
+      npm install -g @jxtools/spawn@latest >/dev/null 2>&1
+  fi
+}
+
 _spawn_has_color() { [[ -t 1 && "${NO_COLOR:-}" == "" ]]; }
 _spawn_bold()  { _spawn_has_color && printf '\033[1m%s\033[0m' "$*" || printf '%s' "$*"; }
 _spawn_dim()   { _spawn_has_color && printf '\033[2m%s\033[0m' "$*" || printf '%s' "$*"; }
@@ -515,9 +592,10 @@ _spawn_check_update_available() {
   fi
 
   local latest
-  latest="$(npm view @jxtools/spawn version 2>/dev/null)" || return 1
+  latest="$(_spawn_npm_view_latest_version)" || return 1
   printf '%s\n' "$now" > "$_SPAWN_UPDATE_CHECK_FILE" 2>/dev/null || true
-  [[ -n "$latest" && "$latest" != "$SPAWN_VERSION" ]] || return 1
+  [[ -n "$latest" ]] || return 1
+  _spawn_version_is_newer "$latest" "$SPAWN_VERSION" || return 1
 
   echo ""
   _spawn_dim "A new version of spawn is available: "

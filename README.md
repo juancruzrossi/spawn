@@ -12,6 +12,12 @@ Supported agents:
 npm install -g @jxtools/spawn
 ```
 
+If your environment requires an explicit npm registry:
+
+```bash
+npm install -g @jxtools/spawn --registry https://registry.npmjs.org/
+```
+
 ### Requirements
 
 - **Node.js 18+**
