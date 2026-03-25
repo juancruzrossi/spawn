@@ -4,13 +4,36 @@ _spawn_offer_gitignore() {
   local worktree_gitignore="$worktree_dir/.gitignore"
   [[ -f "$worktree_gitignore" ]] && grep -qF '.worktrees' "$worktree_gitignore" 2>/dev/null && return 0
 
+  local state_dir answer_file saved_answer
+  state_dir="$(_spawn_repo_state_dir "$repo_root" 2>/dev/null)" || return 0
+  answer_file="$state_dir/worktrees-gitignore-answer"
+  saved_answer=""
+  [[ -f "$answer_file" ]] && saved_answer="$(<"$answer_file")"
+
+  case "$saved_answer" in
+    yes)
+      printf '%s\n' '.worktrees/' >> "$worktree_gitignore"
+      return 0
+      ;;
+    no)
+      return 0
+      ;;
+  esac
+
   [[ -t 0 ]] || return 0
 
   local answer=""
   printf 'Add .worktrees/ to .gitignore in this branch? [Y/n] '
   read -r answer
+  mkdir -p "$state_dir"
   case "${answer:-Y}" in
-    [Yy]*) printf '%s\n' '.worktrees/' >> "$worktree_gitignore" ;;
+    [Yy]*)
+      printf '%s\n' yes > "$answer_file"
+      printf '%s\n' '.worktrees/' >> "$worktree_gitignore"
+      ;;
+    *)
+      printf '%s\n' no > "$answer_file"
+      ;;
   esac
 }
 
