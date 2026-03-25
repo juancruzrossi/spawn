@@ -14,15 +14,18 @@ const {
 const { homedir } = require('os')
 const { join, resolve } = require('path')
 
-function detectRcFile(homeDir, shell) {
-  const candidates = shell.includes('zsh') ? ['.zshrc']
-    : shell.includes('bash') ? ['.bashrc', '.bash_profile']
-    : process.platform === 'darwin' ? ['.zshrc', '.bashrc', '.bash_profile']
-    : ['.bashrc', '.zshrc', '.bash_profile']
-
-  return candidates
+function detectRcFiles(homeDir, shell) {
+  const all = ['.bashrc', '.bash_profile', '.zshrc']
     .map(f => join(homeDir, f))
-    .find(p => existsSync(p)) || join(homeDir, candidates[0])
+    .filter(p => existsSync(p))
+
+  if (all.length > 0) return all
+
+  const fallback = shell.includes('zsh') ? '.zshrc'
+    : shell.includes('bash') || process.platform !== 'darwin' ? '.bashrc'
+    : '.zshrc'
+
+  return [join(homeDir, fallback)]
 }
 
 function loadPackageVersion(packageDir) {
@@ -93,10 +96,10 @@ function installRuntime(options = {}) {
   const version = loadPackageVersion(packageDir)
   copyRuntimeFiles(packageDir, installDir, version)
 
-  const rcFile = detectRcFile(homeDir, shell)
-  ensureSourceLine(rcFile, sourceLine, marker, ignoreRcErrors)
+  const rcFiles = detectRcFiles(homeDir, shell)
+  rcFiles.forEach(f => ensureSourceLine(f, sourceLine, marker, ignoreRcErrors))
 
-  return { rcFile, version }
+  return { rcFile: rcFiles[0], version }
 }
 
 function parseArgs(argv) {
@@ -149,6 +152,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  detectRcFile,
+  detectRcFiles,
   installRuntime,
 }
