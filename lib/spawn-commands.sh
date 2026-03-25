@@ -818,11 +818,10 @@ _spawn_update() {
   fi
 
   _spawn_dim "Current: v$SPAWN_VERSION"; echo ""
-  _spawn_spinner_start "Checking for updates..."
+  echo "Checking for updates..."
 
   local latest
   latest="$(npm view @jxtools/spawn version 2>/dev/null || true)"
-  _spawn_spinner_stop
 
   if [[ -z "$latest" ]]; then
     _spawn_error "could not check latest version"
@@ -835,10 +834,9 @@ _spawn_update() {
   fi
 
   echo "New version available: v$latest"
-  _spawn_spinner_start "Updating..."
+  echo "Updating..."
 
   if npm install -g @jxtools/spawn@latest >/dev/null 2>&1; then
-    _spawn_spinner_stop
     local global_package_dir
     global_package_dir="$(_spawn_global_package_dir)" || {
       _spawn_error "update failed: could not resolve the global package directory"
@@ -854,7 +852,6 @@ _spawn_update() {
     fi
     _spawn_green "✓"; echo " Updated to v$SPAWN_VERSION"
   else
-    _spawn_spinner_stop
     _spawn_error "update failed"
     return 1
   fi
