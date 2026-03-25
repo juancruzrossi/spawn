@@ -259,36 +259,6 @@ Description:
 EOF
 }
 
-_spawn_shell_init() {
-  local shell_name="${1:-}"
-  if [[ -z "$shell_name" ]]; then
-    shell_name="${SHELL##*/}"
-  fi
-
-  case "$shell_name" in
-    bash|zsh) ;;
-    *)
-      _spawn_error "invalid shell: ${shell_name:-unknown}"
-      echo "Valid shells: bash, zsh" >&2
-      return 1
-      ;;
-  esac
-
-  local runtime="${_SPAWN_ENTRY_FILE:-}"
-  if [[ -z "$runtime" || ! -f "$runtime" ]]; then
-    _spawn_error "could not locate the spawn runtime"
-    return 1
-  fi
-
-  local runtime_escaped="$runtime"
-  runtime_escaped="${runtime_escaped//\\/\\\\}"
-  runtime_escaped="${runtime_escaped//\"/\\\"}"
-  runtime_escaped="${runtime_escaped//\$/\\$}"
-  runtime_escaped="${runtime_escaped//\`/\\\`}"
-
-  printf 'source "%s"\n' "$runtime_escaped"
-}
-
 spawn() {
   local cmd="${1:-}"
   shift 2>/dev/null
@@ -299,7 +269,6 @@ spawn() {
     status)  _spawn_status "$@" ;;
     cd)      _spawn_cd "$@" ;;
     ls)      _spawn_ls "$@" ;;
-    __shell-init) _spawn_shell_init "$@" ;;
     merge)   _spawn_merge "$@" ;;
     rm)      _spawn_rm "$@" ;;
     init)    _spawn_init "$@" ;;
