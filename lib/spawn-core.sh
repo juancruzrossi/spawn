@@ -496,30 +496,6 @@ _spawn_detect_worktree_branch() {
   return 1
 }
 
-_spawn_spinner_start() {
-  [[ -n "${ZSH_VERSION:-}" ]] && setopt localoptions nomonitor
-  local msg="${1:-}"
-  [[ -n "$msg" ]] && printf '%s ' "$msg"
-  (
-    while true; do
-      for c in '⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏'; do
-        printf '\b%s' "$c"
-        sleep 0.08
-      done
-    done
-  ) &
-  _SPAWN_SPINNER_PID=$!
-}
-
-_spawn_spinner_stop() {
-  [[ -n "${_SPAWN_SPINNER_PID:-}" ]] || return
-  [[ -n "${ZSH_VERSION:-}" ]] && setopt localoptions nomonitor
-  kill "$_SPAWN_SPINNER_PID" 2>/dev/null
-  wait "$_SPAWN_SPINNER_PID" 2>/dev/null
-  printf '\b \n'
-  unset _SPAWN_SPINNER_PID
-}
-
 _spawn_version() {
   _spawn_bold "spawn v$SPAWN_VERSION"; echo ""
 }
