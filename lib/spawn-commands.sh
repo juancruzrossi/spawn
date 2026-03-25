@@ -1,13 +1,12 @@
 _spawn_offer_gitignore() {
-  local repo_root="$1" layout="$2"
+  local repo_root="$1" worktree_dir="$2" layout="$3"
   [[ "$layout" == "nested" ]] || return 0
-  local gitignore="$repo_root/.gitignore"
-  [[ -f "$gitignore" ]] && grep -qF '.worktrees' "$gitignore" 2>/dev/null && return 0
+  local worktree_gitignore="$worktree_dir/.gitignore"
+  [[ -f "$worktree_gitignore" ]] && grep -qF '.worktrees' "$worktree_gitignore" 2>/dev/null && return 0
 
   local common_dir
   common_dir="$(_spawn_repo_common_dir "$repo_root" 2>/dev/null)" || return 0
   local exclude_file="$common_dir/info/exclude"
-  [[ -f "$exclude_file" ]] && grep -qF '.worktrees/' "$exclude_file" 2>/dev/null && return 0
 
   local state_dir
   state_dir="$(_spawn_repo_state_dir "$repo_root" 2>/dev/null)" || return 0
@@ -15,14 +14,17 @@ _spawn_offer_gitignore() {
   [[ -t 0 ]] || return 0
 
   local answer=""
-  printf 'Add .worktrees/ to local git exclude? [Y/n] '
+  printf 'Add .worktrees/ to .gitignore in this branch? [Y/n] '
   read -r answer
   mkdir -p "$state_dir"
   touch "$state_dir/.worktrees_ignore_offered"
   case "${answer:-Y}" in
     [Yy]*)
+      printf '%s\n' '.worktrees/' >> "$worktree_gitignore"
       mkdir -p "$common_dir/info"
-      printf '%s\n' '.worktrees/' >> "$exclude_file"
+      if [[ ! -f "$exclude_file" ]] || ! grep -qF '.worktrees/' "$exclude_file" 2>/dev/null; then
+        printf '%s\n' '.worktrees/' >> "$exclude_file"
+      fi
       ;;
   esac
 }
@@ -81,7 +83,7 @@ _spawn_new() {
   fi
 
   _spawn_register_repo "$repo_root"
-  _spawn_offer_gitignore "$repo_root" "$layout"
+  _spawn_offer_gitignore "$repo_root" "$worktree_dir" "$layout"
   _spawn_green "✓"; echo " Created worktree: $branch"
   _spawn_dim "  Launching $agent..."; echo ""
   _spawn_schedule_update_check
