@@ -1,6 +1,6 @@
 {
   "name": "@jxtools/spawn",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "CLI tool for running multiple AI coding agents in parallel using git worktrees",
   "bin": {
     "spawn": "spawn.sh"
@@ -8,8 +8,12 @@
   "files": [
     "spawn.sh",
     "lib/",
-    "install.sh"
+    "install.sh",
+    "scripts/"
   ],
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
   "publishConfig": {
     "access": "public"
   },
