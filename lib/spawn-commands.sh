@@ -84,7 +84,11 @@ _spawn_new() {
       mkdir -p "$base_dir"
     fi
 
-    _spawn_git_stdout_quiet -C "$repo_root" worktree add "$worktree_dir" -b "$branch" "$start_point" || return 1
+    if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
+      _spawn_git_stdout_quiet -C "$repo_root" worktree add "$worktree_dir" "$branch" || return 1
+    else
+      _spawn_git_stdout_quiet -C "$repo_root" worktree add "$worktree_dir" -b "$branch" "$start_point" || return 1
+    fi
     cd "$worktree_dir" || return 1
 
     _spawn_run_hook setup "$repo_root" "$worktree_dir" || true
