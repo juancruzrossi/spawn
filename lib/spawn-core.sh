@@ -763,6 +763,9 @@ _spawn_parse_session_args() {
   if [[ "$mode" == "new" ]]; then
     local IFS='-'
     _SPAWN_SESSION_BRANCH="${branch_words[*]}"
+    if [[ -z "$_SPAWN_SESSION_BRANCH" && -n "$_SPAWN_SESSION_FROM" ]]; then
+      _SPAWN_SESSION_BRANCH="$_SPAWN_SESSION_FROM"
+    fi
   fi
 
   _spawn_validate_agent "$_SPAWN_SESSION_AGENT" || return 1
