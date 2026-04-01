@@ -68,8 +68,15 @@ _spawn_new() {
   local layout
   layout="$(_spawn_get_layout "$repo_root")"
 
-  local start_point
-  start_point="$(_spawn_resolve_start_point "$from_ref")" || return 1
+  local checkout_existing=false
+  if [[ "$branch" == "$from_ref" ]]; then
+    checkout_existing=true
+  fi
+
+  local start_point=""
+  if [[ "$checkout_existing" != true ]]; then
+    start_point="$(_spawn_resolve_start_point "$from_ref")" || return 1
+  fi
 
   local worktree_dir
   worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch" "$layout")"
@@ -84,7 +91,7 @@ _spawn_new() {
       mkdir -p "$base_dir"
     fi
 
-    if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
+    if [[ "$checkout_existing" == true ]] || git -C "$repo_root" show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
       _spawn_git_stdout_quiet -C "$repo_root" worktree add "$worktree_dir" "$branch" || return 1
     else
       _spawn_git_stdout_quiet -C "$repo_root" worktree add "$worktree_dir" -b "$branch" "$start_point" || return 1
