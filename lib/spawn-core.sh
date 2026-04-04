@@ -769,7 +769,10 @@ _spawn_parse_session_args() {
   fi
 
   _spawn_validate_agent "$_SPAWN_SESSION_AGENT" || return 1
-  [[ -n "$_SPAWN_SESSION_BRANCH" ]]
+  if [[ -z "$_SPAWN_SESSION_BRANCH" ]]; then
+    _spawn_error "missing branch name"
+    return 1
+  fi
 }
 
 _spawn_run_agent() {
