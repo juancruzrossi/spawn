@@ -66,7 +66,7 @@ spawn start feature/db-indexes -b
 
 | Command | What it does |
 | --- | --- |
-| `spawn new <branch>` | Creates a branch and worktree, then opens the agent. |
+| `spawn new [branch]` | Creates a branch and worktree, then opens the agent. Without a branch, uses the current branch. |
 | `spawn start <branch>` | Reopens an existing worktree and resumes the session. |
 | `spawn status` | Shows worktree states and active agent sessions. |
 | `spawn ls` | Lists spawn-managed branches. |
