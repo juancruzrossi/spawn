@@ -647,7 +647,7 @@ _spawn_etime_to_seconds() {
     etime="${etime#*-}"
   fi
   local IFS=:
-  set -- $etime
+  set -- ${=etime}
   case $# in
     3) hours="$1"; minutes="$2"; seconds="$3" ;;
     2) minutes="$1"; seconds="$2" ;;
@@ -685,7 +685,7 @@ _spawn_collect_agent_procs() {
     if [[ -d "/proc/$_pid" ]]; then
       _cwd="$(readlink -f "/proc/$_pid/cwd" 2>/dev/null || true)"
     elif command -v lsof >/dev/null 2>&1; then
-      _cwd="$(lsof -p "$_pid" 2>/dev/null | awk '$4=="cwd" {print $NF}')"
+      _cwd="$(lsof -a -p "$_pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')"
     else
       continue
     fi
@@ -696,7 +696,7 @@ _spawn_collect_agent_procs() {
     if [[ -n "$_etime" && "$_now" -gt 0 ]]; then
       _start=$(( _now - $(_spawn_etime_to_seconds "$_etime") ))
     fi
-    printf '%s:%s:%s\n' "$_cwd" "$_agent" "$_start"
+    printf '%s\t%s\t%s\n' "$_cwd" "$_agent" "$_start"
   done < <(ps -eo pid=,etime=,command= 2>/dev/null | grep -E '[c]laude|[c]odex')
 }
 
@@ -710,13 +710,9 @@ _spawn_elapsed_label() {
 }
 
 _spawn_match_agent() {
-  local wt_dir="$1" procs="$2" _proc_line _proc_cwd _proc_rest _proc_agent _proc_start
-  while IFS= read -r _proc_line; do
-    [[ -n "$_proc_line" ]] || continue
-    _proc_start="${_proc_line##*:}"
-    _proc_rest="${_proc_line%:*}"
-    _proc_agent="${_proc_rest##*:}"
-    _proc_cwd="${_proc_rest%:*}"
+  local wt_dir="$1" procs="$2" _proc_cwd _proc_agent _proc_start
+  while IFS=$'\t' read -r _proc_cwd _proc_agent _proc_start; do
+    [[ -n "$_proc_cwd" ]] || continue
     if [[ "$_proc_cwd" == "$wt_dir" || "$_proc_cwd" == "$wt_dir/"* ]]; then
       printf '%s:%s' "$_proc_agent" "$_proc_start"
       return 0
