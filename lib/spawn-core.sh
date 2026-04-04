@@ -152,11 +152,12 @@ EOF
 _spawn_print_new_usage() {
   cat <<'EOF'
 Usage:
-  spawn new <branch> [-a <agent>] [-b] [-f <base-branch>] [-p <text>]
+  spawn new [<branch>] [-a <agent>] [-b] [-f <base-branch>] [-p <text>]
 
 Description:
   Creates a new branch and worktree, then opens the selected agent
   in an interactive session.
+  If no branch is given, uses the current branch (requires an attached HEAD).
 
 Options:
   -a, --agent <agent>   Agent to launch: claude or codex
@@ -176,6 +177,7 @@ Examples:
   spawn new feature/rest-performance
   spawn new feature/rest-performance -f develop
   spawn new feature/rest-performance -a codex -p "Optimize the GET /users endpoint"
+  spawn new                                    # uses current branch
 EOF
 }
 
@@ -769,7 +771,7 @@ _spawn_parse_session_args() {
   fi
 
   _spawn_validate_agent "$_SPAWN_SESSION_AGENT" || return 1
-  if [[ -z "$_SPAWN_SESSION_BRANCH" ]]; then
+  if [[ -z "$_SPAWN_SESSION_BRANCH" && "$mode" != "new" ]]; then
     _spawn_error "missing branch name"
     return 1
   fi

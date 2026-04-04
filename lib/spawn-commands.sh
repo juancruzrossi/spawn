@@ -45,11 +45,6 @@ _spawn_new() {
     return 0
   fi
 
-  if [[ -z "${1:-}" ]]; then
-    _spawn_print_new_usage
-    return 1
-  fi
-
   _spawn_parse_session_args new "$@" || { _spawn_clear_session_args; return 1; }
 
   local branch="$_SPAWN_SESSION_BRANCH"
@@ -61,6 +56,16 @@ _spawn_new() {
 
   local repo_root
   repo_root="$(_spawn_require_repo_root)" || return 1
+
+  # Fallback: use current branch when no branch was provided
+  if [[ -z "$branch" ]]; then
+    branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null)" || true
+    if [[ -z "$branch" ]]; then
+      _spawn_error "missing branch name"
+      return 1
+    fi
+    from_ref="$branch"
+  fi
 
   local layout
   layout="$(_spawn_get_layout "$repo_root")"
