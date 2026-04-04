@@ -12,6 +12,7 @@ _spawn_offer_gitignore() {
 
   case "$saved_answer" in
     yes)
+      [[ ! -f "$worktree_gitignore" ]] || [[ "$(tail -c1 "$worktree_gitignore" 2>/dev/null)" == "" ]] || printf '\n' >> "$worktree_gitignore"
       printf '%s\n' '.worktrees/' >> "$worktree_gitignore"
       return 0
       ;;
@@ -29,6 +30,7 @@ _spawn_offer_gitignore() {
   case "${answer:-Y}" in
     [Yy]*)
       printf '%s\n' yes > "$answer_file"
+      [[ ! -f "$worktree_gitignore" ]] || [[ "$(tail -c1 "$worktree_gitignore" 2>/dev/null)" == "" ]] || printf '\n' >> "$worktree_gitignore"
       printf '%s\n' '.worktrees/' >> "$worktree_gitignore"
       ;;
     *)
@@ -56,11 +58,6 @@ _spawn_new() {
   local agent="$_SPAWN_SESSION_AGENT"
   local from_ref="$_SPAWN_SESSION_FROM"
   _spawn_clear_session_args
-
-  if [[ -z "$branch" ]]; then
-    _spawn_print_new_usage
-    return 1
-  fi
 
   local repo_root
   repo_root="$(_spawn_require_repo_root)" || return 1
@@ -127,11 +124,6 @@ _spawn_start() {
   local bypass="$_SPAWN_SESSION_BYPASS"
   local agent="$_SPAWN_SESSION_AGENT"
   _spawn_clear_session_args
-
-  if [[ -z "$branch" ]]; then
-    _spawn_print_start_usage
-    return 1
-  fi
 
   local repo_root
   repo_root="$(_spawn_require_repo_root)" || return 1
@@ -406,6 +398,7 @@ _spawn_rm_all() {
     [[ -n "$wt_dir" ]] || continue
     cd "$wt_dir" 2>/dev/null || { ((failed++)); continue; }
     _spawn_run_hook teardown "$repo_root" "$wt_dir" || true
+    cd "$repo_root" || true
     if _spawn_git_stdout_quiet -C "$repo_root" worktree remove --force "$wt_dir" 2>/dev/null; then
       if git -C "$repo_root" branch -D "$wt_branch" >/dev/null 2>&1; then
         echo "  removed $wt_branch"
@@ -642,18 +635,48 @@ _spawn_registered_repos() {
   printf '%s' "$clean" > "$registry"
 }
 
+_spawn_etime_to_seconds() {
+  local etime="$1" days=0 hours=0 minutes=0 seconds=0
+  if [[ "$etime" == *-* ]]; then
+    days="${etime%%-*}"
+    etime="${etime#*-}"
+  fi
+  local IFS=:
+  set -- $etime
+  case $# in
+    3) hours="$1"; minutes="$2"; seconds="$3" ;;
+    2) minutes="$1"; seconds="$2" ;;
+    1) seconds="$1" ;;
+  esac
+  echo $(( 10#$days * 86400 + 10#$hours * 3600 + 10#$minutes * 60 + 10#$seconds ))
+}
+
 _spawn_collect_agent_procs() {
-  local _seen="" _pid _cmd _cwd _agent _start
+  local _seen="" _pid _etime _cmd _cwd _agent _bin _now
+  _now="$(date +%s 2>/dev/null)" || _now=0
   while IFS= read -r _line; do
     [[ -n "$_line" ]] || continue
     _line="${_line#"${_line%%[! ]*}"}"
     _pid="${_line%% *}"
+    _line="${_line#* }"
+    _line="${_line#"${_line%%[! ]*}"}"
+    _etime="${_line%% *}"
     _cmd="${_line#* }"
-    case "$_cmd" in
-      *claude*) _agent="claude" ;;
-      *codex*)  _agent="codex" ;;
-      *)        continue ;;
+    _cmd="${_cmd#"${_cmd%%[! ]*}"}"
+    _bin="${_cmd%% *}"
+    _bin="${_bin##*/}"
+    _agent=""
+    case "$_bin" in
+      claude) _agent="claude" ;;
+      codex)  _agent="codex" ;;
+      node|bun)
+        case "$_cmd" in
+          *claude*) _agent="claude" ;;
+          *codex*)  _agent="codex" ;;
+        esac
+        ;;
     esac
+    [[ -n "$_agent" ]] || continue
     if [[ -d "/proc/$_pid" ]]; then
       _cwd="$(readlink -f "/proc/$_pid/cwd" 2>/dev/null || true)"
     elif command -v lsof >/dev/null 2>&1; then
@@ -664,18 +687,12 @@ _spawn_collect_agent_procs() {
     [[ -n "$_cwd" ]] || continue
     case $'\n'"$_seen" in *$'\n'"$_cwd"$'\n'*) continue ;; esac
     _seen+="${_cwd}"$'\n'
-    _start="$(ps -o lstart= -p "$_pid" 2>/dev/null | xargs)" || _start=""
-    if [[ -n "$_start" ]]; then
-      if date -j -f "%c" "$_start" "+%s" >/dev/null 2>&1; then
-        _start="$(date -j -f "%c" "$_start" "+%s")"
-      elif date -d "$_start" "+%s" >/dev/null 2>&1; then
-        _start="$(date -d "$_start" "+%s")"
-      else
-        _start=""
-      fi
+    local _start=0
+    if [[ -n "$_etime" && "$_now" -gt 0 ]]; then
+      _start=$(( _now - $(_spawn_etime_to_seconds "$_etime") ))
     fi
-    printf '%s:%s:%s\n' "$_cwd" "$_agent" "${_start:-0}"
-  done < <(ps -eo pid=,command= 2>/dev/null | grep -E '[c]laude|[c]odex')
+    printf '%s:%s:%s\n' "$_cwd" "$_agent" "$_start"
+  done < <(ps -eo pid=,etime=,command= 2>/dev/null | grep -E '[c]laude|[c]odex')
 }
 
 _spawn_elapsed_label() {
