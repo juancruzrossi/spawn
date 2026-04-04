@@ -40,10 +40,10 @@ _spawn_version_key() {
   local major=0 minor=0 patch=0 extra=0
   IFS=. read -r major minor patch extra <<< "$version"
   printf '%08d%08d%08d%08d\n' \
-    "${major:-0}" \
-    "${minor:-0}" \
-    "${patch:-0}" \
-    "${extra:-0}"
+    "$((10#${major:-0}))" \
+    "$((10#${minor:-0}))" \
+    "$((10#${patch:-0}))" \
+    "$((10#${extra:-0}))"
 }
 
 _spawn_version_is_newer() {
