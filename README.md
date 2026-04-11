@@ -92,6 +92,70 @@ spawn start feature/db-indexes -b
 | `--replace` | `init` | Overwrites an existing setup hook. |
 | `--global` | `config set` | Applies the layout globally instead of per-repo. |
 
+## Worktree layouts
+
+Control where worktrees are created with `spawn config set layout <preset>`.
+
+### `nested` (default)
+
+Worktrees live inside the repo under `.worktrees/`:
+
+```
+myapp/
+  .worktrees/
+    feature-auth/
+    fix-csv/
+  src/
+  package.json
+```
+
+```sh
+spawn config set layout nested
+```
+
+### `outer-nested`
+
+Worktrees live in a sibling directory named `<repo>.worktrees/`:
+
+```
+projects/
+  myapp/
+  myapp.worktrees/
+    feature-auth/
+    fix-csv/
+```
+
+```sh
+spawn config set layout outer-nested
+```
+
+### `sibling`
+
+Each worktree is a sibling directory named `<repo>-<branch>`:
+
+```
+projects/
+  myapp/
+  myapp-feature-auth/
+  myapp-fix-csv/
+```
+
+```sh
+spawn config set layout sibling
+```
+
+### Global vs per-repo
+
+By default the layout is set per-repo. Use `--global` to apply it to all repos:
+
+```sh
+spawn config set layout outer-nested --global
+```
+
+Per-repo settings take precedence over the global default.
+
+> With `outer-nested` and `sibling` layouts, `spawn ls`, `spawn rm`, `spawn cd`, and `spawn status` work from the parent directory — no need to be inside the repo.
+
 ## Environment variables
 
 | Variable | Effect |

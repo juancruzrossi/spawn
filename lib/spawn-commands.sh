@@ -156,7 +156,7 @@ _spawn_cd() {
   fi
 
   local repo_root
-  repo_root="$(_spawn_require_repo_root)" || return 1
+  repo_root="$(_spawn_resolve_repo_root)" || return 1
 
   if [[ -z "${1:-}" ]]; then
     cd "$repo_root" || return 1
@@ -168,9 +168,17 @@ _spawn_cd() {
   worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch")"
 
   if [[ ! -d "$worktree_dir" ]]; then
-    _spawn_error "worktree not found: $worktree_dir"
-    echo "Run 'spawn ls' to see available worktrees." >&2
-    return 1
+    local _alt_repo
+    _alt_repo="$(_spawn_find_worktree_repo "$branch" "$repo_root" 2>/dev/null)" && {
+      local _alt_layout
+      _alt_layout="$(_spawn_get_layout "$_alt_repo")"
+      worktree_dir="$(_spawn_worktree_dir "$_alt_repo" "$branch" "$_alt_layout")"
+    }
+    if [[ ! -d "$worktree_dir" ]]; then
+      _spawn_error "worktree not found: $branch"
+      echo "Run 'spawn ls' to see available worktrees." >&2
+      return 1
+    fi
   fi
 
   cd "$worktree_dir" || return 1
@@ -182,17 +190,30 @@ _spawn_ls() {
     return 0
   fi
 
-  local repo_root
-  repo_root="$(_spawn_require_repo_root)" || return 1
-  local repo_parent="${repo_root%/*}"
+  local all_roots
+  all_roots="$(_spawn_resolve_all_repo_roots)" || return 1
 
   local rows="" max_w=6
-  local wt_dir="" wt_branch=""
-  while IFS=$'\t' read -r wt_dir wt_branch; do
-    [[ -n "$wt_dir" ]] || continue
-    (( ${#wt_branch} > max_w )) && max_w=${#wt_branch}
-    rows+="${wt_branch}"$'\t'"${wt_dir#$repo_parent/}"$'\n'
-  done < <(_spawn_spawn_worktree_pairs "$repo_root")
+  local repo_count=0
+  while IFS= read -r _line; do [[ -n "$_line" ]] && ((repo_count++)); done <<< "$all_roots"
+
+  local repo_root repo_parent label
+  while IFS= read -r repo_root; do
+    [[ -n "$repo_root" ]] || continue
+    repo_parent="${repo_root%/*}"
+
+    local wt_dir="" wt_branch=""
+    while IFS=$'\t' read -r wt_dir wt_branch; do
+      [[ -n "$wt_dir" ]] || continue
+      if (( repo_count > 1 )); then
+        label="${repo_root##*/}:${wt_branch}"
+      else
+        label="$wt_branch"
+      fi
+      (( ${#label} > max_w )) && max_w=${#label}
+      rows+="${label}"$'\t'"${wt_dir#$repo_parent/}"$'\n'
+    done < <(_spawn_spawn_worktree_pairs "$repo_root")
+  done <<< "$all_roots"
 
   if [[ -z "$rows" ]]; then
     echo "No spawn worktrees found."
@@ -297,7 +318,7 @@ _spawn_rm() {
   done
 
   local repo_root
-  repo_root="$(_spawn_require_repo_root)" || return 1
+  repo_root="$(_spawn_resolve_repo_root)" || return 1
 
   if [[ "$branch" == "--all" ]]; then
     _spawn_rm_all "$repo_root"
@@ -320,8 +341,16 @@ _spawn_rm() {
   worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch" "$layout")"
 
   if [[ ! -d "$worktree_dir" ]]; then
-    _spawn_error "worktree not found: $worktree_dir"
-    return 1
+    local _alt_repo
+    _alt_repo="$(_spawn_find_worktree_repo "$branch" "$repo_root" 2>/dev/null)" && {
+      repo_root="$_alt_repo"
+      layout="$(_spawn_get_layout "$repo_root")"
+      worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch" "$layout")"
+    }
+    if [[ ! -d "$worktree_dir" ]]; then
+      _spawn_error "worktree not found: $branch"
+      return 1
+    fi
   fi
 
   local -a remove_args=("$worktree_dir")
@@ -742,31 +771,34 @@ _spawn_status() {
 
 _spawn_status_repo() {
   local agent_procs="$1"
-  local repo_root
-  repo_root="$(_spawn_repo_root)" || { _spawn_error "not in a git repo (use --all for global view)"; return 1; }
+  local all_roots
+  all_roots="$(_spawn_resolve_all_repo_roots 2>/dev/null)" || { _spawn_error "not in a git repo (use --all for global view)"; return 1; }
 
   local rows="" max_b=6 max_w=8
-  local wt_dir="" wt_branch=""
+  local wt_dir="" wt_branch="" repo_root=""
 
-  while IFS=$'\t' read -r wt_dir wt_branch; do
-    [[ -d "$wt_dir" ]] || continue
+  while IFS= read -r repo_root; do
+    [[ -n "$repo_root" ]] || continue
+    while IFS=$'\t' read -r wt_dir wt_branch; do
+      [[ -d "$wt_dir" ]] || continue
 
-    local match=""
-    match="$(_spawn_match_agent "$wt_dir" "$agent_procs")" || true
+      local match=""
+      match="$(_spawn_match_agent "$wt_dir" "$agent_procs")" || true
 
-    local agent="" start_ts="" last_activity="-" display_state="○ idle"
-    if [[ -n "$match" ]]; then
-      agent="${match%%:*}"
-      start_ts="${match#*:}"
-      display_state="● active"
-      [[ "$start_ts" != "0" && -n "$start_ts" ]] && last_activity="$(_spawn_elapsed_label "$start_ts")"
-    fi
+      local agent="" start_ts="" last_activity="-" display_state="○ idle"
+      if [[ -n "$match" ]]; then
+        agent="${match%%:*}"
+        start_ts="${match#*:}"
+        display_state="● active"
+        [[ "$start_ts" != "0" && -n "$start_ts" ]] && last_activity="$(_spawn_elapsed_label "$start_ts")"
+      fi
 
-    local rel_path="${wt_dir##*/}"
-    (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
-    (( ${#rel_path} > max_w )) && max_w=${#rel_path}
-    rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${agent:--}"$'\t'"${display_state}"$'\t'"${last_activity}"$'\n'
-  done < <(_spawn_spawn_worktree_pairs "$repo_root")
+      local rel_path="${wt_dir##*/}"
+      (( ${#wt_branch} > max_b )) && max_b=${#wt_branch}
+      (( ${#rel_path} > max_w )) && max_w=${#rel_path}
+      rows+="${wt_branch}"$'\t'"${rel_path}"$'\t'"${agent:--}"$'\t'"${display_state}"$'\t'"${last_activity}"$'\n'
+    done < <(_spawn_spawn_worktree_pairs "$repo_root")
+  done <<< "$all_roots"
 
   if [[ -z "$rows" ]]; then
     echo "No spawn worktrees found."
