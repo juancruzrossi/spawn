@@ -383,6 +383,100 @@ _spawn_require_repo_root() {
   printf '%s\n' "$repo_root"
 }
 
+# Discover repo roots when not inside a git repo.
+# 1. Look for *.worktrees dirs in $PWD → infer repo (foo.worktrees → foo)
+# 2. Look for sibling dirs that look like repo-branch patterns
+# 3. Fallback to registered repos whose worktree base is under $PWD
+_spawn_discover_repo_roots() {
+  local found=""
+  local dir
+  dir="$(pwd -P)"
+  local wt_dir candidate canon
+
+  # Strategy 1: *.worktrees directories in current dir → outer-nested layout
+  while IFS= read -r -d '' wt_dir; do
+    [[ -d "$wt_dir" ]] || continue
+    candidate="${wt_dir%.worktrees}"
+    [[ -d "$candidate" ]] || continue
+    git -C "$candidate" rev-parse --git-dir >/dev/null 2>&1 || continue
+    canon="$(CDPATH= cd -- "$candidate" && pwd -P)" || continue
+    case $'\n'"$found" in *$'\n'"$canon"$'\n'*) continue ;; esac
+    found+="${canon}"$'\n'
+  done < <(find "$dir" -maxdepth 1 -name '*.worktrees' -type d -print0 2>/dev/null)
+
+  # Strategy 2: registered repos whose worktree base is under current dir
+  local registry="$SPAWN_HOME/repos"
+  if [[ -f "$registry" ]]; then
+    local _repo _canon_repo
+    while IFS= read -r _repo; do
+      [[ -n "$_repo" && -d "$_repo" ]] || continue
+      _canon_repo="$(CDPATH= cd -- "$_repo" && pwd -P)" || continue
+      case $'\n'"$found" in *$'\n'"$_canon_repo"$'\n'*) continue ;; esac
+      [[ "${_canon_repo%/*}" == "$dir" ]] || continue
+      git -C "$_canon_repo" rev-parse --git-dir >/dev/null 2>&1 || continue
+      found+="${_canon_repo}"$'\n'
+    done < "$registry"
+  fi
+
+  [[ -n "$found" ]] || return 1
+  printf '%s' "$found"
+}
+
+# Try _spawn_repo_root first, then discover.
+# Returns a single repo root (first found).
+_spawn_resolve_repo_root() {
+  local repo_root
+  repo_root="$(_spawn_repo_root 2>/dev/null)" && {
+    printf '%s\n' "$repo_root"
+    return 0
+  }
+
+  local discovered
+  discovered="$(_spawn_discover_repo_roots 2>/dev/null)" || {
+    _spawn_error "not in a git repo and no spawn repositories found in this directory"
+    return 1
+  }
+
+  # Return first discovered repo
+  local first
+  first="$(head -1 <<< "$discovered")"
+  printf '%s\n' "$first"
+}
+
+# Like _spawn_resolve_repo_root but returns ALL discovered repos (one per line).
+_spawn_resolve_all_repo_roots() {
+  local repo_root
+  repo_root="$(_spawn_repo_root 2>/dev/null)" && {
+    printf '%s\n' "$repo_root"
+    return 0
+  }
+
+  _spawn_discover_repo_roots 2>/dev/null || {
+    _spawn_error "not in a git repo and no spawn repositories found in this directory"
+    return 1
+  }
+}
+
+_spawn_find_worktree_repo() {
+  local branch="$1" skip_repo="${2:-}"
+  local registry="$SPAWN_HOME/repos"
+  [[ -f "$registry" ]] || return 1
+
+  local _repo _layout _dir
+  while IFS= read -r _repo; do
+    [[ -n "$_repo" && -d "$_repo" ]] || continue
+    [[ "$_repo" != "$skip_repo" ]] || continue
+    git -C "$_repo" rev-parse --git-dir >/dev/null 2>&1 || continue
+    _layout="$(_spawn_get_layout "$_repo")"
+    _dir="$(_spawn_worktree_dir "$_repo" "$branch" "$_layout")"
+    if [[ -d "$_dir" ]]; then
+      printf '%s\n' "$_repo"
+      return 0
+    fi
+  done < "$registry"
+  return 1
+}
+
 _spawn_safe_name() {
   printf '%s\n' "${1//\//-}"
 }
