@@ -1,11 +1,14 @@
 _spawn_worktree_names() {
-  local repo_root
-  repo_root="$(_spawn_repo_root 2>/dev/null)" || return
+  local all_roots
+  all_roots="$(_spawn_resolve_all_repo_roots 2>/dev/null)" || return
 
-  local wt_dir wt_branch
-  while IFS=$'\t' read -r wt_dir wt_branch; do
-    [[ -n "$wt_branch" ]] && printf '%s\n' "$wt_branch"
-  done < <(_spawn_spawn_worktree_pairs "$repo_root")
+  local repo_root wt_dir wt_branch
+  while IFS= read -r repo_root; do
+    [[ -n "$repo_root" ]] || continue
+    while IFS=$'\t' read -r wt_dir wt_branch; do
+      [[ -n "$wt_dir" ]] && printf '%s\n' "${wt_dir##*/}"
+    done < <(_spawn_spawn_worktree_pairs "$repo_root")
+  done <<< "$all_roots"
 }
 
 _spawn_branch_names() {

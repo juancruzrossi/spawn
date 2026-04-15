@@ -174,11 +174,25 @@ _spawn_cd() {
       _alt_layout="$(_spawn_get_layout "$_alt_repo")"
       worktree_dir="$(_spawn_worktree_dir "$_alt_repo" "$branch" "$_alt_layout")"
     }
-    if [[ ! -d "$worktree_dir" ]]; then
-      _spawn_error "worktree not found: $branch"
-      echo "Run 'spawn ls' to see available worktrees." >&2
-      return 1
-    fi
+  fi
+
+  if [[ ! -d "$worktree_dir" ]]; then
+    local _r _rl _rd
+    while IFS= read -r _r; do
+      [[ -n "$_r" ]] || continue
+      _rl="$(_spawn_get_layout "$_r")"
+      _rd="$(_spawn_worktree_dir "$_r" "$branch" "$_rl")"
+      if [[ -d "$_rd" ]]; then
+        worktree_dir="$_rd"
+        break
+      fi
+    done < <(_spawn_resolve_all_repo_roots 2>/dev/null)
+  fi
+
+  if [[ ! -d "$worktree_dir" ]]; then
+    _spawn_error "worktree not found: $branch"
+    echo "Run 'spawn ls' to see available worktrees." >&2
+    return 1
   fi
 
   cd "$worktree_dir" || return 1
@@ -193,11 +207,11 @@ _spawn_ls() {
   local all_roots
   all_roots="$(_spawn_resolve_all_repo_roots)" || return 1
 
-  local rows="" max_w=6
+  local rows="" max_wt=8 max_path=4
   local repo_count=0
   while IFS= read -r _line; do [[ -n "$_line" ]] && ((repo_count++)); done <<< "$all_roots"
 
-  local repo_root repo_parent label
+  local repo_root repo_parent label wt_name path_col
   while IFS= read -r repo_root; do
     [[ -n "$repo_root" ]] || continue
     repo_parent="${repo_root%/*}"
@@ -205,13 +219,16 @@ _spawn_ls() {
     local wt_dir="" wt_branch=""
     while IFS=$'\t' read -r wt_dir wt_branch; do
       [[ -n "$wt_dir" ]] || continue
+      wt_name="${wt_dir##*/}"
+      path_col="${wt_dir#$repo_parent/}"
       if (( repo_count > 1 )); then
         label="${repo_root##*/}:${wt_branch}"
       else
         label="$wt_branch"
       fi
-      (( ${#label} > max_w )) && max_w=${#label}
-      rows+="${label}"$'\t'"${wt_dir#$repo_parent/}"$'\n'
+      (( ${#wt_name} > max_wt )) && max_wt=${#wt_name}
+      (( ${#path_col} > max_path )) && max_path=${#path_col}
+      rows+="${wt_name}"$'\t'"${path_col}"$'\t'"${label}"$'\n'
     done < <(_spawn_spawn_worktree_pairs "$repo_root")
   done <<< "$all_roots"
 
@@ -220,12 +237,12 @@ _spawn_ls() {
     return 0
   fi
 
-  _spawn_bold "$(printf '%-*s  %s' "$max_w" "BRANCH" "PATH")"
+  _spawn_bold "$(printf '%-*s  %-*s  %s' "$max_wt" "WORKTREE" "$max_path" "PATH" "BRANCH")"
   echo ""
-  local _b _p
-  while IFS=$'\t' read -r _b _p; do
-    [[ -n "$_b" ]] || continue
-    printf '%-*s  %s\n' "$max_w" "$_b" "$_p"
+  local _w _p _b
+  while IFS=$'\t' read -r _w _p _b; do
+    [[ -n "$_w" ]] || continue
+    printf '%-*s  %-*s  %s\n' "$max_wt" "$_w" "$max_path" "$_p" "$_b"
   done <<< "$rows"
 }
 
