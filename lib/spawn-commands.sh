@@ -2,7 +2,7 @@ _spawn_offer_gitignore() {
   local repo_root="$1" worktree_dir="$2" layout="$3"
   [[ "$layout" == "nested" ]] || return 0
   local worktree_gitignore="$worktree_dir/.gitignore"
-  [[ -f "$worktree_gitignore" ]] && grep -qF '.worktrees' "$worktree_gitignore" 2>/dev/null && return 0
+  [[ -f "$worktree_gitignore" ]] && grep -Eq '^[[:space:]]*\.worktrees/?[[:space:]]*$' "$worktree_gitignore" 2>/dev/null && return 0
 
   local state_dir answer_file saved_answer
   state_dir="$(_spawn_repo_state_dir "$repo_root" 2>/dev/null)" || return 0
@@ -632,6 +632,7 @@ _spawn_config() {
   local config_file
   if [[ "$global" == true ]]; then
     config_file="$(_spawn_global_config_file)"
+    mkdir -p "${config_file%/*}"
   else
     if [[ -z "$repo_root" ]]; then
       _spawn_error "not in a git repo. Use --global to set globally."
@@ -655,7 +656,10 @@ _spawn_config() {
     fi
   fi
 
-  printf '{\n  "layout": "%s"\n}\n' "$preset" > "$config_file"
+  printf '{\n  "layout": "%s"\n}\n' "$preset" > "$config_file" || {
+    _spawn_error "failed to write config: $config_file"
+    return 1
+  }
 
   local target="per-repo"
   [[ "$global" == true ]] && target="global"
@@ -692,12 +696,20 @@ _spawn_etime_to_seconds() {
     days="${etime%%-*}"
     etime="${etime#*-}"
   fi
-  local IFS=:
-  set -- ${=etime}
-  case $# in
-    3) hours="$1"; minutes="$2"; seconds="$3" ;;
-    2) minutes="$1"; seconds="$2" ;;
-    1) seconds="$1" ;;
+  case "$etime" in
+    *:*:*)
+      hours="${etime%%:*}"
+      etime="${etime#*:}"
+      minutes="${etime%%:*}"
+      seconds="${etime##*:}"
+      ;;
+    *:*)
+      minutes="${etime%%:*}"
+      seconds="${etime##*:}"
+      ;;
+    *)
+      seconds="$etime"
+      ;;
   esac
   echo $(( 10#$days * 86400 + 10#$hours * 3600 + 10#$minutes * 60 + 10#$seconds ))
 }
@@ -774,7 +786,17 @@ _spawn_status() {
   fi
 
   local show_all=false
-  [[ "${1:-}" == "--all" ]] && show_all=true
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --all) show_all=true ;;
+      *)
+        _spawn_error "unknown option: $1"
+        _spawn_print_status_usage
+        return 1
+        ;;
+    esac
+    shift
+  done
 
   local agent_procs
   agent_procs="$(_spawn_collect_agent_procs)"
