@@ -786,7 +786,17 @@ _spawn_status() {
   fi
 
   local show_all=false
-  [[ "${1:-}" == "--all" ]] && show_all=true
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --all) show_all=true ;;
+      *)
+        _spawn_error "unknown option: $1"
+        _spawn_print_status_usage
+        return 1
+        ;;
+    esac
+    shift
+  done
 
   local agent_procs
   agent_procs="$(_spawn_collect_agent_procs)"
