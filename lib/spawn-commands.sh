@@ -2,7 +2,7 @@ _spawn_offer_gitignore() {
   local repo_root="$1" worktree_dir="$2" layout="$3"
   [[ "$layout" == "nested" ]] || return 0
   local worktree_gitignore="$worktree_dir/.gitignore"
-  [[ -f "$worktree_gitignore" ]] && grep -qF '.worktrees' "$worktree_gitignore" 2>/dev/null && return 0
+  [[ -f "$worktree_gitignore" ]] && grep -Eq '^[[:space:]]*\.worktrees/?[[:space:]]*$' "$worktree_gitignore" 2>/dev/null && return 0
 
   local state_dir answer_file saved_answer
   state_dir="$(_spawn_repo_state_dir "$repo_root" 2>/dev/null)" || return 0
