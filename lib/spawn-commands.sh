@@ -692,12 +692,20 @@ _spawn_etime_to_seconds() {
     days="${etime%%-*}"
     etime="${etime#*-}"
   fi
-  local IFS=:
-  set -- ${=etime}
-  case $# in
-    3) hours="$1"; minutes="$2"; seconds="$3" ;;
-    2) minutes="$1"; seconds="$2" ;;
-    1) seconds="$1" ;;
+  case "$etime" in
+    *:*:*)
+      hours="${etime%%:*}"
+      etime="${etime#*:}"
+      minutes="${etime%%:*}"
+      seconds="${etime##*:}"
+      ;;
+    *:*)
+      minutes="${etime%%:*}"
+      seconds="${etime##*:}"
+      ;;
+    *)
+      seconds="$etime"
+      ;;
   esac
   echo $(( 10#$days * 86400 + 10#$hours * 3600 + 10#$minutes * 60 + 10#$seconds ))
 }
