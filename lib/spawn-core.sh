@@ -531,8 +531,15 @@ _spawn_read_layout_from_file() {
       line="${line#*\"layout\"}"
       line="${line#*\"}"
       line="${line%%\"*}"
-      printf '%s\n' "$line"
-      return 0
+      case "$line" in
+        nested|outer-nested|sibling)
+          printf '%s\n' "$line"
+          return 0
+          ;;
+        *)
+          return 1
+          ;;
+      esac
     fi
   done < "$config_file"
 }
