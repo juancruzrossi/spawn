@@ -632,6 +632,7 @@ _spawn_config() {
   local config_file
   if [[ "$global" == true ]]; then
     config_file="$(_spawn_global_config_file)"
+    mkdir -p "${config_file%/*}"
   else
     if [[ -z "$repo_root" ]]; then
       _spawn_error "not in a git repo. Use --global to set globally."
@@ -655,7 +656,10 @@ _spawn_config() {
     fi
   fi
 
-  printf '{\n  "layout": "%s"\n}\n' "$preset" > "$config_file"
+  printf '{\n  "layout": "%s"\n}\n' "$preset" > "$config_file" || {
+    _spawn_error "failed to write config: $config_file"
+    return 1
+  }
 
   local target="per-repo"
   [[ "$global" == true ]] && target="global"
