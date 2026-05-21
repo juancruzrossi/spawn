@@ -6,7 +6,7 @@ _spawn_worktree_names() {
   while IFS= read -r repo_root; do
     [[ -n "$repo_root" ]] || continue
     while IFS=$'\t' read -r wt_dir wt_branch; do
-      [[ -n "$wt_dir" ]] && printf '%s\n' "${wt_dir##*/}"
+      [[ -n "$wt_dir" ]] && printf '%s\n' "$wt_branch"
     done < <(_spawn_spawn_worktree_pairs "$repo_root")
   done <<< "$all_roots"
 }
