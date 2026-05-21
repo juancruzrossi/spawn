@@ -37,6 +37,8 @@ _spawn_global_package_dir() {
 
 _spawn_version_key() {
   local version="${1%%-*}"
+  # Guard against non-numeric versions (e.g. "unknown") to avoid arithmetic errors
+  [[ "$version" =~ ^[0-9]+([.][0-9]+){0,3}$ ]] || version=0
   local major=0 minor=0 patch=0 extra=0
   IFS=. read -r major minor patch extra <<< "$version"
   printf '%08d%08d%08d%08d\n' \
