@@ -877,7 +877,15 @@ _spawn_parse_session_args() {
       --)
         shift
         while [[ $# -gt 0 ]]; do
-          branch_words+=("$1")
+          if [[ "$mode" == "new" ]]; then
+            branch_words+=("$1")
+          else
+            if [[ -n "$_SPAWN_SESSION_BRANCH" ]]; then
+              _spawn_error "too many arguments"
+              return 1
+            fi
+            _SPAWN_SESSION_BRANCH="$1"
+          fi
           shift
         done
         ;;
