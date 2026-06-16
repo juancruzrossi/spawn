@@ -1,42 +1,24 @@
-_spawn_offer_gitignore() {
-  local repo_root="$1" worktree_dir="$2" layout="$3"
+# Hide the nested worktrees dir from Git in every checkout (the primary one
+# included) by adding it to the shared info/exclude. That file lives in the
+# common Git dir, so it applies repo-wide, and it is untracked, so it neither
+# prompts the user nor dirties a committed .gitignore.
+_spawn_ignore_worktrees_dir() {
+  local repo_root="$1" layout="$2"
   [[ "$layout" == "nested" ]] || return 0
-  local worktree_gitignore="$worktree_dir/.gitignore"
-  [[ -f "$worktree_gitignore" ]] && grep -Eq '^[[:space:]]*\.worktrees/?[[:space:]]*$' "$worktree_gitignore" 2>/dev/null && return 0
 
-  local state_dir answer_file saved_answer
-  state_dir="$(_spawn_repo_state_dir "$repo_root" 2>/dev/null)" || return 0
-  answer_file="$state_dir/worktrees-gitignore-answer"
-  saved_answer=""
-  [[ -f "$answer_file" ]] && saved_answer="$(<"$answer_file")"
+  local common_dir
+  common_dir="$(_spawn_repo_common_dir "$repo_root" 2>/dev/null)" || return 0
 
-  case "$saved_answer" in
-    yes)
-      [[ ! -f "$worktree_gitignore" ]] || [[ "$(tail -c1 "$worktree_gitignore" 2>/dev/null)" == "" ]] || printf '\n' >> "$worktree_gitignore"
-      printf '%s\n' '.worktrees/' >> "$worktree_gitignore"
-      return 0
-      ;;
-    no)
-      return 0
-      ;;
-  esac
+  local exclude_file="$common_dir/info/exclude"
+  mkdir -p "$common_dir/info" 2>/dev/null || return 0
 
-  [[ -t 0 ]] || return 0
+  if [[ -f "$exclude_file" ]] && \
+     grep -Eq '^[[:space:]]*\.worktrees/?[[:space:]]*$' "$exclude_file" 2>/dev/null; then
+    return 0
+  fi
 
-  local answer=""
-  printf 'Add .worktrees/ to .gitignore in this branch? [Y/n] '
-  read -r answer
-  mkdir -p "$state_dir"
-  case "${answer:-Y}" in
-    [Yy]*)
-      printf '%s\n' yes > "$answer_file"
-      [[ ! -f "$worktree_gitignore" ]] || [[ "$(tail -c1 "$worktree_gitignore" 2>/dev/null)" == "" ]] || printf '\n' >> "$worktree_gitignore"
-      printf '%s\n' '.worktrees/' >> "$worktree_gitignore"
-      ;;
-    *)
-      printf '%s\n' no > "$answer_file"
-      ;;
-  esac
+  [[ ! -f "$exclude_file" ]] || [[ "$(tail -c1 "$exclude_file" 2>/dev/null)" == "" ]] || printf '\n' >> "$exclude_file"
+  printf '%s\n' '.worktrees/' >> "$exclude_file"
 }
 
 _spawn_new() {
@@ -105,7 +87,7 @@ _spawn_new() {
   fi
 
   _spawn_register_repo "$repo_root"
-  _spawn_offer_gitignore "$repo_root" "$worktree_dir" "$layout"
+  _spawn_ignore_worktrees_dir "$repo_root" "$layout"
   _spawn_green "✓"; echo " Created worktree: $branch"
   _spawn_dim "  Launching $agent..."; echo ""
   _spawn_schedule_update_check
