@@ -84,6 +84,7 @@ _spawn_new() {
   worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch" "$layout")"
 
   if [[ -d "$worktree_dir" ]]; then
+    _spawn_guard_branch_collision "$repo_root" "$worktree_dir" "$branch" new || return 1
     cd "$worktree_dir" || return 1
   else
     local base_dir
@@ -142,6 +143,8 @@ _spawn_start() {
     return 1
   fi
 
+  _spawn_guard_branch_collision "$repo_root" "$worktree_dir" "$branch" start || return 1
+
   cd "$worktree_dir" || return 1
   _spawn_green "✓"; echo " Resuming session: $branch"
   _spawn_dim "  Launching $agent..."; echo ""
@@ -166,6 +169,10 @@ _spawn_cd() {
   local branch="$1"
   local worktree_dir
   worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch")"
+
+  if [[ -d "$worktree_dir" ]]; then
+    _spawn_guard_branch_collision "$repo_root" "$worktree_dir" "$branch" cd || return 1
+  fi
 
   if [[ ! -d "$worktree_dir" ]]; then
     local _alt_repo
@@ -286,6 +293,8 @@ _spawn_merge() {
     return 1
   fi
 
+  _spawn_guard_branch_collision "$repo_root" "$worktree_dir" "$branch" merge || return 1
+
   if ! git -C "$worktree_dir" diff --quiet 2>/dev/null || \
      ! git -C "$worktree_dir" diff --cached --quiet 2>/dev/null; then
     _spawn_error "worktree has uncommitted changes: $worktree_dir"
@@ -369,6 +378,8 @@ _spawn_rm() {
       return 1
     fi
   fi
+
+  _spawn_guard_branch_collision "$repo_root" "$worktree_dir" "$branch" rm || return 1
 
   local -a remove_args=("$worktree_dir")
   $force && remove_args=("--force" "${remove_args[@]}")
