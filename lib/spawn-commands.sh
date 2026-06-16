@@ -65,8 +65,10 @@ _spawn_new() {
   local worktree_dir
   worktree_dir="$(_spawn_worktree_dir "$repo_root" "$branch" "$layout")"
 
+  local created=true
   if [[ -d "$worktree_dir" ]]; then
     _spawn_guard_branch_collision "$repo_root" "$worktree_dir" "$branch" new || return 1
+    created=false
     cd "$worktree_dir" || return 1
   else
     local base_dir
@@ -88,7 +90,11 @@ _spawn_new() {
 
   _spawn_register_repo "$repo_root"
   _spawn_ignore_worktrees_dir "$repo_root" "$layout"
-  _spawn_green "✓"; echo " Created worktree: $branch"
+  if [[ "$created" == true ]]; then
+    _spawn_green "✓"; echo " Created worktree: $branch"
+  else
+    _spawn_green "✓"; echo " Reopened worktree: $branch"
+  fi
   _spawn_dim "  Launching $agent..."; echo ""
   _spawn_schedule_update_check
   _spawn_run_agent "$agent" interactive "$prompt" "$bypass"
