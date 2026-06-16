@@ -381,6 +381,17 @@ _spawn_rm() {
 
   _spawn_guard_branch_collision "$repo_root" "$worktree_dir" "$branch" rm || return 1
 
+  # Refuse to delete a branch whose commits are not merged into the primary
+  # checkout's HEAD unless forced, so 'spawn rm' can't silently orphan work.
+  # The branch is deleted with 'git branch -D' below, which never checks this.
+  if ! $force && ! git -C "$repo_root" merge-base --is-ancestor "refs/heads/$branch" HEAD 2>/dev/null; then
+    local _target
+    _target="$(git -C "$repo_root" rev-parse --abbrev-ref HEAD 2>/dev/null)"
+    _spawn_error "branch '$branch' has commits not merged into ${_target:-HEAD}"
+    echo "Merge it first, or re-run 'spawn rm --force $branch' to delete it and discard those commits." >&2
+    return 1
+  fi
+
   local -a remove_args=("$worktree_dir")
   $force && remove_args=("--force" "${remove_args[@]}")
 
