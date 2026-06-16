@@ -678,6 +678,41 @@ _spawn_detect_worktree_branch() {
   return 1
 }
 
+# Print the branch checked out at a specific worktree directory, if any.
+# Used to detect sanitized-name collisions (e.g. "feature/x" and "feature-x"
+# both map to the dir ".worktrees/feature-x"). Returns 1 when the directory
+# is not a registered worktree or is on a detached HEAD.
+_spawn_branch_at_worktree() {
+  local repo_root="$1" target_dir="$2"
+  local _line _cur=""
+  while IFS= read -r _line; do
+    case "$_line" in
+      "worktree "*) _cur="${_line#worktree }" ;;
+      "branch refs/heads/"*)
+        if [[ "$_cur" == "$target_dir" ]]; then
+          printf '%s\n' "${_line#branch refs/heads/}"
+          return 0
+        fi
+        ;;
+    esac
+  done < <(git -C "$repo_root" worktree list --porcelain 2>/dev/null)
+  return 1
+}
+
+# Fail when a requested branch resolves to a worktree dir already held by a
+# different branch (sanitized-name collision). $3 is the verb for the hint.
+_spawn_guard_branch_collision() {
+  local repo_root="$1" worktree_dir="$2" branch="$3" verb="${4:-use}"
+  [[ -d "$worktree_dir" ]] || return 0
+  local actual_branch
+  actual_branch="$(_spawn_branch_at_worktree "$repo_root" "$worktree_dir" 2>/dev/null || true)"
+  [[ -n "$actual_branch" && "$actual_branch" != "$branch" ]] || return 0
+  _spawn_error "'$branch' resolves to a worktree on branch '$actual_branch'"
+  echo "Branch names with '/' appear as '-' in the WORKTREE column; pass the BRANCH name." >&2
+  echo "Did you mean 'spawn $verb $actual_branch'?" >&2
+  return 1
+}
+
 _spawn_version() {
   _spawn_bold "spawn v$SPAWN_VERSION"; echo ""
 }
