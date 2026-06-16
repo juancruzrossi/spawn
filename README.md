@@ -50,8 +50,12 @@ Once the fix is ready, fold it back and clean up:
 
 ```sh
 spawn merge fix/csv-encoding --squash
-spawn rm fix/csv-encoding
+spawn rm fix/csv-encoding --force
 ```
+
+> `spawn rm` refuses to delete a branch whose commits aren't merged into the
+> primary checkout, so it can't silently discard work. A squash merge leaves
+> the branch looking unmerged to Git, so pair it with `--force` to remove it.
 
 Resume the feature the next day, right where the agent left off:
 
