@@ -901,8 +901,14 @@ _spawn_parse_session_args() {
   done
 
   if [[ "$mode" == "new" ]]; then
-    local IFS='-'
-    _SPAWN_SESSION_BRANCH="${branch_words[*]}"
+    # Reject extra positional tokens instead of silently joining them with '-'
+    # (a stray word would otherwise become part of the branch name).
+    if [[ "${#branch_words[@]}" -gt 1 ]]; then
+      _spawn_error "too many arguments: ${branch_words[*]}"
+      echo "Pass a single branch name; quote it if it must contain spaces." >&2
+      return 1
+    fi
+    _SPAWN_SESSION_BRANCH="${branch_words[0]:-}"
     if [[ -z "$_SPAWN_SESSION_BRANCH" && -n "$_SPAWN_SESSION_FROM" ]]; then
       _SPAWN_SESSION_BRANCH="$_SPAWN_SESSION_FROM"
     fi
